@@ -2,7 +2,7 @@
 
 ## Base.fun Smart Contract
 
-Welcome to basedotfun or base.fun smart contract with the same functionality as pumpdotfun or pump.fun, such as adding virtual LP, removing LP, creating Raydium Pool. This is the Rust/Anchor smart contract of pump.fun.
+Welcome to basedotfun or base.fun smart contract with the same functionality as pumpdotfun or pump.fun, such as adding virtual LP, removing LP, creating Uniswap Pool. This is the Solidity/Hardhat smart contract of pump.fun.
 
 If you're interested in having the Pump.fun smart contract access or have any doubts, please reach out to me through the following contacts:
 
