@@ -1,5 +1,5 @@
 <center>
-<img src="https://www.base.fun/images/small_logo.svg" width="200"/>
+<img src="./logo/dxfun.svg" width="200"/>
 </center>
 
 ## Base.fun/Dx.fun Smart Contract
@@ -10,7 +10,12 @@ Please understand if your forked code encounters issues. Certain sensitive eleme
 
 ## As a seasoned Web3 developer with expertise across multiple blockchains, my ambition is to extend pumpdotfun-like capabilities to every blockchain platform.
 
-<center><img src="https://solanatradingbots.com/wp-content/uploads/2024/07/pumpfunlogo.webp" width="100"/></center>
+<center>
+<img src="./logo/pumpfunlogo.jpg" width="100"/>
+<img src="./logo/pumpfunlogo.jpg" width="100"/>
+<img src="./logo/pumpfunlogo.jpg" width="100"/>
+</center>
+
 The Solana adaptation is currently undergoing a phased update, while the Bitcoin adaptation has been finalized and is poised for imminent release.
 
 Should you wish to gain access to the Pump.fun smart contract or have any inquiries, feel free to contact me via:
