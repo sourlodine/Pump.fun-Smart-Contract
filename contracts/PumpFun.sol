@@ -108,6 +108,34 @@ contract PumpFun is ReentrancyGuard {
 
     event Deployed(address indexed token, uint256 amount0, uint256 amount1);
 
+    event SwapETHForTokens(
+        address indexed token, 
+        address indexed pair,
+        uint256 amount0In, 
+        uint256 amount0Out,
+        uint256 prevPrice,
+        uint256 price,
+        uint256 mCap,
+        uint256 liquidity,
+        uint256 _liquidity,
+        uint256 volume,
+        uint256 volume24H
+    );
+
+    event SwapTokensForETH(
+        address indexed token, 
+        address indexed pair,
+        uint256 amount0In, 
+        uint256 amount0Out,
+        uint256 prevPrice,
+        uint256 price,
+        uint256 mCap,
+        uint256 liquidity,
+        uint256 _liquidity,
+        uint256 volume,
+        uint256 volume24H
+    );
+
     constructor(address factory_, address router_, address fee_to, uint256 _fee) {
         owner = msg.sender;
 
@@ -358,6 +386,20 @@ contract PumpFun is ReentrancyGuard {
             }
         }
 
+        emit SwapETHForTokens(
+            tk, 
+            _pair, 
+            amount0In,
+            amount1Out,
+            _price,
+            price,
+            mCap,
+            liquidity,
+            _liquidity,
+            volume,
+            token[tk].data.volume + amount1Out
+        );
+
         return true;
     }
 
@@ -413,6 +455,20 @@ contract PumpFun is ReentrancyGuard {
                 }
             }
         }
+
+        emit SwapTokensForETH(
+            tk, 
+            _pair, 
+            amount1In,
+            amount0Out,
+            _price,
+            price,
+            mCap,
+            liquidity,
+            _liquidity,
+            volume,
+            token[tk].data.volume + amount1In
+        );
 
         return true;
     }
