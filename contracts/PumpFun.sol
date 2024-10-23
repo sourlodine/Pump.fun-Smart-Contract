@@ -386,7 +386,7 @@ contract PumpFun is ReentrancyGuard {
             }
         }
 
-        emit SwapETHForTokens(
+        emit SwapTokensForETH(
             tk, 
             _pair, 
             amount0In,
@@ -456,7 +456,7 @@ contract PumpFun is ReentrancyGuard {
             }
         }
 
-        emit SwapTokensForETH(
+        emit SwapETHForTokens(
             tk, 
             _pair, 
             amount1In,
