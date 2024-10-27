@@ -20,8 +20,12 @@
     "typechain": "^5.1.2"
   },
   "dependencies": {
+    "@openzeppelin/contracts": "^5.0.2",
+    "@openzeppelin/contracts-upgradeable": "^5.1.0",
     "@synapseprotocol/sdk": "^0.94.1",
     "@uniswap/sdk-core": "^3.0.1",
+    "@uniswap/v2-core": "^1.0.1",
+    "@uniswap/v2-periphery": "^1.1.0-beta.0",
     "@uniswap/v3-sdk": "^3.8.2",
     "bn.js": "^5.2.0",
     "body-parser": "^1.20.2",
@@ -29,7 +33,7 @@
     "csv-parse": "^4.16.3",
     "express": "^4.18.2",
     "get-all-files": "^4.1.0",
-    "solidity-code-metrics": "^0.0.25",
-    "@openzeppelin/contracts": "^5.0.2"
+    "solady": "0.0.233",
+    "solidity-code-metrics": "^0.0.25"
   }
 }

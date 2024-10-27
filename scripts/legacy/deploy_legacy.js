@@ -1,4 +1,4 @@
-const { deployContract, sendTxn, sleep, writeTmpAddresses } = require("./shared/helpers")
+const { deployContract, sendTxn, sleep, writeTmpAddresses } = require("../shared/helpers")
 
 async function main() {
     const [deployer] = await ethers.getSigners()
