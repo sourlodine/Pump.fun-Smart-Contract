@@ -24,7 +24,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public constant FEE_DENOMINATOR = 10000;
 
     mapping(address => TokenState) public tokens;
-    mapping (uint=> address ) private tokensAddresses;
+    mapping(uint => address) private tokensAddresses;
     uint totalTokensAddresses;
 
     mapping(address => uint256) public collateral;
@@ -36,7 +36,15 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public fee;
 
     // Events
-    event TokenCreated(address indexed token, uint256 timestamp);
+    event TokenCreated(
+        address indexed token,
+        string name,
+        string symbol,
+        string uri,
+        address creator,
+        uint256 timestamp
+    );
+
     event TokenLiqudityAdded(address indexed token, uint256 timestamp);
 
     event TokenBuy(
@@ -89,17 +97,26 @@ contract TokenFactory is ReentrancyGuard, Ownable {
 
     function createToken(
         string memory name,
-        string memory symbol
+        string memory symbol,
+        string memory uri
     ) external returns (address) {
         address tokenAddress = Clones.clone(tokenImplementation);
         Token token = Token(tokenAddress);
-        token.initialize(name, symbol);
+        token.initialize(name, symbol, uri, address(this));
         tokens[tokenAddress] = TokenState.FUNDING;
 
         tokensAddresses[totalTokensAddresses] = tokenAddress;
         totalTokensAddresses++;
 
-        emit TokenCreated(tokenAddress, block.timestamp);
+        emit TokenCreated(
+            tokenAddress,
+            name,
+            symbol,
+            uri,
+            msg.sender,
+            block.timestamp
+        );
+
         return tokenAddress;
     }
 
@@ -226,15 +243,18 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (_amount * _feePercent) / FEE_DENOMINATOR;
     }
 
-    function burnAllAndReleaseWinner(address tokenAddress) external nonReentrant {
+    function burnAllAndReleaseWinner(
+        address tokenAddress
+    ) external onlyOwner {
         uint256 winnerCollateral = collateral[tokenAddress];
 
         for (uint i = 0; i < totalTokensAddresses; i++) {
             address _tokenAddress = tokensAddresses[i];
 
-            if(tokensAddresses[i] != tokenAddress) {
+            if (tokensAddresses[i] != tokenAddress) {
                 Token token = Token(_tokenAddress);
-                token.burn(address(this), token.totalSupply());
+                uint256 _totalSupply = token.totalSupply();
+                token.burn(address(this), _totalSupply);
                 winnerCollateral += collateral[_tokenAddress];
                 collateral[_tokenAddress] = 0;
             }
@@ -243,17 +263,17 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         Token token = Token(tokenAddress);
         token.mint(address(this), INITIAL_SUPPLY);
 
-        address pair = createLiquilityPool(tokenAddress);
+        // address pair = createLiquilityPool(tokenAddress);
 
-        uint256 liquidity = addLiquidity(
-            tokenAddress,
-            INITIAL_SUPPLY,
-            winnerCollateral
-        );
+        // uint256 liquidity = addLiquidity(
+        //     tokenAddress,
+        //     INITIAL_SUPPLY,
+        //     winnerCollateral
+        // );
 
-        burnLiquidityToken(pair, liquidity);
+        // burnLiquidityToken(pair, liquidity);
 
-        tokens[tokenAddress] = TokenState.TRADING;
+        // tokens[tokenAddress] = TokenState.TRADING;
 
         collateral[tokenAddress] = 0;
 
