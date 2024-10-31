@@ -2,9 +2,34 @@ const { ADDRESS_ZERO } = require("@uniswap/v3-sdk")
 const { deployContract, sendTxn, contractAt } = require("./shared/helpers")
 const { expandDecimals } = require("./shared/utilities")
 
-async function main() {
+async function createToken(tokenFactory, name, symbol) {
+    // creating new Token
+    const tx = await tokenFactory.createToken(name, symbol, 'https://harmony.one');
+    const receipt = await tx.wait()
+    console.log('tokenFactory.createToken: ', receipt.transactionHash);
+
+    const addedTokenAddress = receipt.events.find(e => e.event === 'TokenCreated')?.args.token;
+
+    console.log(`${symbol} tokenAddress: `, addedTokenAddress);
+
+    return addedTokenAddress;
+}
+
+async function getTokenBalances(tokenAddress) {
     const [deployer] = await ethers.getSigners()
-    const weth = { address: "0xcF664087a5bB0237a0BAd6742852ec6c8d69A27a" }
+    const token = await contractAt("Token", tokenAddress);
+
+    const symbol = await token.symbol();
+
+    // check token balance
+    console.log(`${symbol} balance: `, Number(await token.balanceOf(deployer.address)));
+
+    console.log(`${symbol} totalSupply: `, Number(await token.totalSupply()));
+}
+
+async function deployTokenFactory() {
+    // const [deployer] = await ethers.getSigners()
+    // const weth = { address: "0xcF664087a5bB0237a0BAd6742852ec6c8d69A27a" }
 
     const tokenImplementation = await deployContract("Token", [], "Token")
 
@@ -18,47 +43,48 @@ async function main() {
         100, // _feePercent
     ], "TokenFactory")
 
-    // creating new Token
-    const tx = await tokenFactory.createToken("MyFirstToken", "MFT");
-    const receipt = await tx.wait()
-    console.log('tokenFactory.createToken: ', receipt.transactionHash);
+    return tokenFactory;
+}
 
-    const addedTokenAddress = receipt.events.find(e => e.event === 'TokenCreated')?.args.token;
+async function main() {
+    const tokenFactory = await deployTokenFactory();
 
-    console.log('tokenAddress: ', addedTokenAddress);
+    const tokenA = await createToken(tokenFactory, "MyFirstToken1", "AAA");
+    const tokenB = await createToken(tokenFactory, "MyFirstToken2", "BBB");
 
-    // TRADING
-
-    // check token balance
-    console.log('Checking token: ', addedTokenAddress);
-
-    const token = await contractAt("Token", addedTokenAddress);
-
-    // check token balance
-    console.log('User balance before: ', Number(await token.balanceOf(deployer.address)));
-
-    console.log('totalSupply: ', Number(await token.totalSupply()));
+    await getTokenBalances(tokenA);
+    await getTokenBalances(tokenB);
 
     // buy token for ONE
     await sendTxn(
-        tokenFactory.buy(addedTokenAddress, { value: expandDecimals(1, 14) }),
+        tokenFactory.buy(tokenA, { value: expandDecimals(1, 14) }),
         "tokenFactory.buy"
     )
 
-    console.log('User balance after BUY: ', Number(await token.balanceOf(deployer.address)));
+    await sendTxn(
+        tokenFactory.buy(tokenB, { value: expandDecimals(1, 13) }),
+        "tokenFactory.buy"
+    )
+
+    await getTokenBalances(tokenA);
+    await getTokenBalances(tokenB);
 
     // buy token for ONE
     await sendTxn(
-        tokenFactory.sell(addedTokenAddress, expandDecimals(1, 21)),
+        tokenFactory.sell(tokenA, expandDecimals(1, 21)),
         "tokenFactory.sell"
     )
 
-    console.log('User balance after SELL: ', Number(await token.balanceOf(deployer.address)));
+    await getTokenBalances(tokenA);
+    await getTokenBalances(tokenB);
 
     await sendTxn(
-        tokenFactory.burnAllAndReleaseWinner(addedTokenAddress),
+        tokenFactory.burnAllAndReleaseWinner(tokenB),
         "tokenFactory.burnAllAndReleaseWinner"
     );
+
+    await getTokenBalances(tokenA);
+    await getTokenBalances(tokenB);
 };
 
 main()
