@@ -21,6 +21,4 @@ Please understand if your forked code encounters issues. Certain sensitive eleme
 
 Should you wish to gain access to the Pump.fun smart contract or have any inquiries, feel free to contact me via:
 
-- <a href="https://t.me/evilgon_dev/">Telegram </a>
-
-### If you found this helpful, don't forget to <a href="https://github.com/sourlodine">follow</a> me.
+- <a href="https://t.me/TarpanTg/">Telegram </a>
