@@ -35,6 +35,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public feePercent; // bp
     uint256 public fee;
 
+    address public winnerToken;
+
     // Events
     event TokenCreated(
         address indexed token,
@@ -60,6 +62,18 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 amount0In,
         uint256 amount0Out,
         uint256 fee,
+        uint256 timestamp
+    );
+
+    event SetWinner(address indexed winner, uint256 timestamp);
+
+    event BurnTokenAndMintWinner(
+        address indexed sender,
+        address indexed token,
+        address indexed winnerToken,
+        uint256 burnedAmount,
+        uint256 receivedETH,
+        uint256 mintedAmount,
         uint256 timestamp
     );
 
@@ -121,10 +135,13 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     }
 
     function buy(address tokenAddress) external payable nonReentrant {
+        _buy(tokenAddress, msg.sender, msg.value);
+    }
+
+    function _buy(address tokenAddress, address receiver, uint256 valueToBuy) internal returns(uint256) {
         require(tokens[tokenAddress] == TokenState.FUNDING, "Token not found");
-        require(msg.value > 0, "ETH not enough");
+        require(valueToBuy > 0, "ETH not enough");
         // calculate fee
-        uint256 valueToBuy = msg.value;
         uint256 valueToReturn;
         uint256 tokenCollateral = collateral[tokenAddress];
 
@@ -148,34 +165,32 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 availableSupply = FUNDING_SUPPLY - token.totalSupply();
         require(amount <= availableSupply, "Token supply not enough");
         tokenCollateral += contributionWithoutFee;
-        token.mint(msg.sender, amount);
-        // when reached FUNDING_GOAL
-        // if (tokenCollateral >= FUNDING_GOAL) {
-        //     token.mint(address(this), INITIAL_SUPPLY);
-        //     address pair = createLiquilityPool(tokenAddress);
-        //     uint256 liquidity = addLiquidity(
-        //         tokenAddress,
-        //         INITIAL_SUPPLY,
-        //         tokenCollateral
-        //     );
-        //     burnLiquidityToken(pair, liquidity);
-        //     tokenCollateral = 0;
-        //     tokens[tokenAddress] = TokenState.TRADING;
-        //     emit TokenLiqudityAdded(tokenAddress, block.timestamp);
-        // }
+        token.mint(receiver, amount);
+
         collateral[tokenAddress] = tokenCollateral;
         // return left
-        if (valueToReturn > 0) {
-            (bool success, ) = msg.sender.call{value: msg.value - valueToBuy}(
-                new bytes(0)
-            );
-            require(success, "ETH send failed");
-        }
+        // if (valueToReturn > 0) {
+        //     (bool success, ) = receiver.call{value: amount - valueToBuy}(
+        //         new bytes(0)
+        //     );
+        //     require(success, "ETH send failed");
+        // }
 
-        emit TokenBuy(tokenAddress, msg.value, amount, fee, block.timestamp);
+        emit TokenBuy(tokenAddress, valueToBuy, amount, fee, block.timestamp);
+
+        return (amount);
     }
 
     function sell(address tokenAddress, uint256 amount) external nonReentrant {
+        _sell(tokenAddress, amount, msg.sender, msg.sender);
+    }
+
+    function _sell(
+        address tokenAddress,
+        uint256 amount,
+        address from,
+        address to
+    ) internal returns (uint256) {
         require(
             tokens[tokenAddress] == TokenState.FUNDING,
             "Token is not funding"
@@ -190,14 +205,19 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 _fee = calculateFee(receivedETH, feePercent);
         receivedETH -= _fee;
         fee += _fee;
-        token.burn(msg.sender, amount);
+        token.burn(from, amount);
         collateral[tokenAddress] -= receivedETH;
         // send ether
         //slither-disable-next-line arbitrary-send-eth
-        (bool success, ) = msg.sender.call{value: receivedETH}(new bytes(0));
-        require(success, "ETH send failed");
+
+        if(to != address(this)) {
+            (bool success, ) = to.call{value: receivedETH}(new bytes(0));
+            require(success, "ETH send failed");
+        }
 
         emit TokenSell(tokenAddress, amount, receivedETH, fee, block.timestamp);
+
+        return receivedETH;
     }
 
     // Internal functions
@@ -243,40 +263,32 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (_amount * _feePercent) / FEE_DENOMINATOR;
     }
 
-    function burnAllAndReleaseWinner(
+    function setWinner(address winnerAddress) external onlyOwner {
+        winnerToken = winnerAddress;
+
+        emit SetWinner(winnerAddress, block.timestamp);
+    }
+
+    function burnTokenAndMintWinner(
         address tokenAddress
-    ) external onlyOwner {
-        uint256 winnerCollateral = collateral[tokenAddress];
-
-        for (uint i = 0; i < totalTokensAddresses; i++) {
-            address _tokenAddress = tokensAddresses[i];
-
-            if (tokensAddresses[i] != tokenAddress) {
-                Token token = Token(_tokenAddress);
-                uint256 _totalSupply = token.totalSupply();
-                token.burn(address(this), _totalSupply);
-                winnerCollateral += collateral[_tokenAddress];
-                collateral[_tokenAddress] = 0;
-            }
-        }
+    ) external nonReentrant {
+        require(tokenAddress != winnerToken, "token address is the winner");
 
         Token token = Token(tokenAddress);
-        token.mint(address(this), INITIAL_SUPPLY);
+        uint256 burnedAmount = token.balanceOf(msg.sender);
 
-        // address pair = createLiquilityPool(tokenAddress);
+        uint256 receivedETH = _sell(tokenAddress, burnedAmount, msg.sender, address(this));
 
-        // uint256 liquidity = addLiquidity(
-        //     tokenAddress,
-        //     INITIAL_SUPPLY,
-        //     winnerCollateral
-        // );
+        uint256 mintedAmount = _buy(winnerToken, msg.sender, receivedETH);
 
-        // burnLiquidityToken(pair, liquidity);
-
-        // tokens[tokenAddress] = TokenState.TRADING;
-
-        collateral[tokenAddress] = 0;
-
-        emit TokenLiqudityAdded(tokenAddress, block.timestamp);
+        emit BurnTokenAndMintWinner(
+            msg.sender, 
+            tokenAddress, 
+            winnerToken, 
+            burnedAmount, 
+            receivedETH,
+            mintedAmount, 
+            block.timestamp
+        );
     }
 }

@@ -79,8 +79,13 @@ async function main() {
     await getTokenBalances(tokenB);
 
     await sendTxn(
-        tokenFactory.burnAllAndReleaseWinner(tokenB),
-        "tokenFactory.burnAllAndReleaseWinner"
+        tokenFactory.setWinner(tokenA),
+        "tokenFactory.setWinner"
+    )
+
+    await sendTxn(
+        tokenFactory.burnTokenAndMintWinner(tokenB),
+        "tokenFactory.burnTokenAndMintWinner"
     );
 
     await getTokenBalances(tokenA);
