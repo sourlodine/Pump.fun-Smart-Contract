@@ -7,16 +7,20 @@ import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "./libraries/math/SafeMath.sol";
 
 import {BondingCurve} from "./BondingCurve.sol";
 import {Token} from "./Token.sol";
 
 contract TokenFactory is ReentrancyGuard, Ownable {
+    using SafeMath for uint256;
+
     enum TokenState {
         NOT_CREATED,
         FUNDING,
         TRADING
     }
+
     uint256 public constant MAX_SUPPLY = 10 ** 9 * 1 ether; // 1 Billion
     uint256 public constant INITIAL_SUPPLY = (MAX_SUPPLY * 1) / 5;
     uint256 public constant FUNDING_SUPPLY = (MAX_SUPPLY * 4) / 5;
@@ -27,6 +31,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     mapping(uint => address) private tokensAddresses;
     uint totalTokensAddresses;
 
+    mapping(address => uint256) public creationDate;
+
     mapping(address => uint256) public collateral;
     address public immutable tokenImplementation;
     address public uniswapV2Router;
@@ -34,8 +40,11 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     BondingCurve public bondingCurve;
     uint256 public feePercent; // bp
     uint256 public fee;
+    uint256 public maxFundingRateInterval = 1 days;
 
-    address public winnerToken;
+    mapping(address => uint256) winners;
+
+    mapping(uint256 => mapping(address => uint256)) public collateralByDay;
 
     // Events
     event TokenCreated(
@@ -93,6 +102,10 @@ contract TokenFactory is ReentrancyGuard, Ownable {
 
     // Admin functions
 
+    function setMaxFundingRateInterval(uint256 interval) external onlyOwner {
+        maxFundingRateInterval = interval;
+    }
+
     function setBondingCurve(address _bondingCurve) external onlyOwner {
         bondingCurve = BondingCurve(_bondingCurve);
     }
@@ -105,6 +118,10 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         (bool success, ) = msg.sender.call{value: fee}(new bytes(0));
         require(success, "ETH send failed");
         fee = 0;
+    }
+
+    function startOfCurrentDay() public view returns (uint256) {
+        return (block.timestamp.div(1 days).mul(1 days));
     }
 
     // Token functions
@@ -122,6 +139,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         tokensAddresses[totalTokensAddresses] = tokenAddress;
         totalTokensAddresses++;
 
+        creationDate[tokenAddress] = block.timestamp;
+
         emit TokenCreated(
             tokenAddress,
             name,
@@ -135,10 +154,20 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     }
 
     function buy(address tokenAddress) external payable nonReentrant {
+        require(
+            block.timestamp.sub(creationDate[tokenAddress]) <
+                maxFundingRateInterval,
+            "Operation allowed only during the funding rate interval"
+        );
+
         _buy(tokenAddress, msg.sender, msg.value);
     }
 
-    function _buy(address tokenAddress, address receiver, uint256 valueToBuy) internal returns(uint256) {
+    function _buy(
+        address tokenAddress,
+        address receiver,
+        uint256 valueToBuy
+    ) internal returns (uint256) {
         require(tokens[tokenAddress] == TokenState.FUNDING, "Token not found");
         require(valueToBuy > 0, "ETH not enough");
         // calculate fee
@@ -168,6 +197,16 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         token.mint(receiver, amount);
 
         collateral[tokenAddress] = tokenCollateral;
+
+        // store collateralByDay for winner detecting
+        uint256 currentDay = startOfCurrentDay();
+        uint256 tokenCollateralToday = collateralByDay[currentDay][
+            tokenAddress
+        ];
+        tokenCollateralToday += contributionWithoutFee;
+        collateralByDay[currentDay][tokenAddress] = tokenCollateralToday;
+
+        // TODO - return left not working for burnTokenAndMintWinner case
         // return left
         // if (valueToReturn > 0) {
         //     (bool success, ) = receiver.call{value: amount - valueToBuy}(
@@ -182,6 +221,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     }
 
     function sell(address tokenAddress, uint256 amount) external nonReentrant {
+        require(
+            block.timestamp.sub(creationDate[tokenAddress]) <
+                maxFundingRateInterval,
+            "Operation allowed only during the funding rate interval"
+        );
+
         _sell(tokenAddress, amount, msg.sender, msg.sender);
     }
 
@@ -210,7 +255,11 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         // send ether
         //slither-disable-next-line arbitrary-send-eth
 
-        if(to != address(this)) {
+        // store collateralByDay for winner detecting
+        uint256 currentDay = startOfCurrentDay();
+        collateralByDay[currentDay][tokenAddress] -= receivedETH;
+
+        if (to != address(this)) {
             (bool success, ) = to.call{value: receivedETH}(new bytes(0));
             require(success, "ETH send failed");
         }
@@ -263,31 +312,56 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (_amount * _feePercent) / FEE_DENOMINATOR;
     }
 
-    function setWinner(address winnerAddress) external onlyOwner {
-        winnerToken = winnerAddress;
+    function getWinnerByDay(uint256 day) public view returns (address) {
+        uint256 maxDayCollateral = 0;
+        address winnerAddress;
 
-        emit SetWinner(winnerAddress, block.timestamp);
+        for (uint256 i = 0; i < totalTokensAddresses; i++) {
+            address tokenAddress = tokensAddresses[i];
+            uint256 _collateral = collateralByDay[day][tokenAddress];
+
+            if (_collateral > maxDayCollateral) {
+                maxDayCollateral = _collateral;
+                winnerAddress = tokenAddress;
+            }
+        }
+
+        return winnerAddress;
+    }
+
+    function setWinner() external {
+        uint256 prevDay = startOfCurrentDay().sub(1 days);
+        address winnerAddress = getWinnerByDay(prevDay);
+
+        winners[winnerAddress] = prevDay;
+
+        emit SetWinner(winnerAddress, prevDay);
     }
 
     function burnTokenAndMintWinner(
         address tokenAddress
     ) external nonReentrant {
-        require(tokenAddress != winnerToken, "token address is the winner");
+        require(winners[tokenAddress] > 0, "token address is the winner");
 
         Token token = Token(tokenAddress);
         uint256 burnedAmount = token.balanceOf(msg.sender);
 
-        uint256 receivedETH = _sell(tokenAddress, burnedAmount, msg.sender, address(this));
+        uint256 receivedETH = _sell(
+            tokenAddress,
+            burnedAmount,
+            msg.sender,
+            address(this)
+        );
 
         uint256 mintedAmount = _buy(winnerToken, msg.sender, receivedETH);
 
         emit BurnTokenAndMintWinner(
-            msg.sender, 
-            tokenAddress, 
-            winnerToken, 
-            burnedAmount, 
+            msg.sender,
+            tokenAddress,
+            winnerToken,
+            burnedAmount,
             receivedETH,
-            mintedAmount, 
+            mintedAmount,
             block.timestamp
         );
     }

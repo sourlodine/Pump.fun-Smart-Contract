@@ -1,5 +1,5 @@
 const { ADDRESS_ZERO } = require("@uniswap/v3-sdk")
-const { deployContract, sendTxn, contractAt } = require("./shared/helpers")
+const { deployContract, sendTxn, contractAt, sleep } = require("./shared/helpers")
 const { expandDecimals } = require("./shared/utilities")
 
 async function createToken(tokenFactory, name, symbol) {
@@ -46,8 +46,17 @@ async function deployTokenFactory() {
     return tokenFactory;
 }
 
-async function main() {
+async function test({ maxFundingRateInterval }) {
+    console.log(`----test ${maxFundingRateInterval} --------------`);
     const tokenFactory = await deployTokenFactory();
+
+    await sendTxn(
+        tokenFactory.setMaxFundingRateInterval(maxFundingRateInterval),
+        "tokenFactory.setMaxFundingRateInterval"
+    )
+    console.log('maxFundingRateInterval: ', Number(await tokenFactory.maxFundingRateInterval()))
+
+    await sleep(2000);
 
     const tokenA = await createToken(tokenFactory, "MyFirstToken1", "AAA");
     const tokenB = await createToken(tokenFactory, "MyFirstToken2", "BBB");
@@ -79,7 +88,7 @@ async function main() {
     await getTokenBalances(tokenB);
 
     await sendTxn(
-        tokenFactory.setWinner(tokenA),
+        tokenFactory.setWinner(),
         "tokenFactory.setWinner"
     )
 
@@ -91,6 +100,26 @@ async function main() {
     await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
 };
+
+async function main() {
+    try {
+        await test({ maxFundingRateInterval: 86400 });
+    } catch (e) {
+        console.log(e)
+    }
+
+    try {
+        await test({ maxFundingRateInterval: 1 });
+    } catch (e) {
+        console.log(e)
+    }
+
+    try {
+        await test({ maxFundingRateInterval: 10 });
+    } catch (e) {
+        console.log(e)
+    }
+}
 
 main()
     .then(() => process.exit(0))
