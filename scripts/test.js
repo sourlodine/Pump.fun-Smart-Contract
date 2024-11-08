@@ -68,7 +68,7 @@ async function test({ maxFundingRateInterval }) {
     await sendTxn(
         tokenFactory.buy(tokenA, { value: expandDecimals(1, 14) }),
         "tokenFactory.buy"
-    )
+    )    
 
     await sendTxn(
         tokenFactory.buy(tokenB, { value: expandDecimals(1, 13) }),
@@ -99,6 +99,13 @@ async function test({ maxFundingRateInterval }) {
 
     await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
+
+    const day = 60 * 60 * 24;
+    const currentDateTime = Math.floor(Date.now() / 1000);
+    const startOfDay = Math.floor(currentDateTime / day) * day;
+
+    console.log('winner: ', await tokenFactory.getWinnerByDay(startOfDay));
+    console.log('winner day: ', await tokenFactory.winners(tokenA));
 };
 
 async function main() {
@@ -107,6 +114,8 @@ async function main() {
     } catch (e) {
         console.log(e)
     }
+
+    return;
 
     try {
         await test({ maxFundingRateInterval: 1 });

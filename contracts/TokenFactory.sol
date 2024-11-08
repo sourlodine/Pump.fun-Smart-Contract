@@ -42,7 +42,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public fee;
     uint256 public maxFundingRateInterval = 1 days;
 
-    mapping(address => uint256) winners;
+    mapping(address => uint256) public winners;
 
     mapping(uint256 => mapping(address => uint256)) public collateralByDay;
 
@@ -139,7 +139,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         tokensAddresses[totalTokensAddresses] = tokenAddress;
         totalTokensAddresses++;
 
-        creationDate[tokenAddress] = block.timestamp;
+        creationDate[tokenAddress] = startOfCurrentDay();
 
         emit TokenCreated(
             tokenAddress,
@@ -330,7 +330,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     }
 
     function setWinner() external {
-        uint256 prevDay = startOfCurrentDay().sub(1 days);
+        uint256 prevDay = startOfCurrentDay(); // .sub(1 days); // TODO - for testing
         address winnerAddress = getWinnerByDay(prevDay);
 
         winners[winnerAddress] = prevDay;
@@ -341,7 +341,10 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     function burnTokenAndMintWinner(
         address tokenAddress
     ) external nonReentrant {
-        require(winners[tokenAddress] > 0, "token address is the winner");
+        uint256 _creationDate = creationDate[tokenAddress];
+        address winnerToken = getWinnerByDay(_creationDate);
+
+        require(winnerToken != tokenAddress, "token address is the winner");
 
         Token token = Token(tokenAddress);
         uint256 burnedAmount = token.balanceOf(msg.sender);
