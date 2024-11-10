@@ -330,7 +330,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     }
 
     function setWinner() external {
-        uint256 prevDay = startOfCurrentDay(); // .sub(1 days); // TODO - for testing
+        uint256 prevDay = startOfCurrentDay().sub(1 days);
         address winnerAddress = getWinnerByDay(prevDay);
 
         winners[winnerAddress] = prevDay;
