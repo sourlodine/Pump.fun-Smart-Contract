@@ -5,12 +5,12 @@ import "./BancorFormula.sol";
 // based on https://medium.com/relevant-community/bonding-curves-in-depth-intuition-parametrization-d3905a681e0a
 contract BancorBondingCurve is BancorFormula {
     uint256 public immutable slope;
-    uint256 public immutable reserveRatio;
+    uint32 public immutable reserveRatio;
 
     // reserveRatio = connectorWeight, but is scaled by MAX_WEIGHT (1000000)
     // also note that unscaled reserveRatio = 1 / (n+1), so a reserveRatio 1000000 means n=0, reserveRatio=2000000 means n=1, and so on
     // slope (denoted as m in the article) is only relevant when supply = 0. When supply is non-zero, the price for minting k tokens can be fully determined by current balance and supply
-    constructor(uint256 _slope, uint256 _reserveRatio) {
+    constructor(uint256 _slope, uint32 _reserveRatio) {
         slope = _slope;
         reserveRatio = _reserveRatio;
     }
