@@ -1,5 +1,7 @@
 pragma solidity ^0.8.26;
 
+// TODO: make this a library after constant uint256 array is supported
+
 /**
  * bancor formula by bancor
  * https://github.com/bancorprotocol/contracts
@@ -8,8 +10,7 @@ pragma solidity ^0.8.26;
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements;
  * and to You under the Apache License, Version 2.0. "
  */
-library Power {
-    string public version = "0.3.1";
+contract Power {
 
     uint256 private constant ONE = 1;
     uint32 private constant MAX_WEIGHT = 1000000;
@@ -37,7 +38,137 @@ library Power {
     */
     uint256[128] private maxExpArray;
 
-    function Power() public {
+//    uint256[128] private constant maxExpArray = [
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0,
+//    0x1c35fedd14ffffffffffffffffffffffff,
+//    0x1b0ce43b323fffffffffffffffffffffff,
+//    0x19f0028ec1ffffffffffffffffffffffff,
+//    0x18ded91f0e7fffffffffffffffffffffff,
+//    0x17d8ec7f0417ffffffffffffffffffffff,
+//    0x16ddc6556cdbffffffffffffffffffffff,
+//    0x15ecf52776a1ffffffffffffffffffffff,
+//    0x15060c256cb2ffffffffffffffffffffff,
+//    0x1428a2f98d72ffffffffffffffffffffff,
+//    0x13545598e5c23fffffffffffffffffffff,
+//    0x1288c4161ce1dfffffffffffffffffffff,
+//    0x11c592761c666fffffffffffffffffffff,
+//    0x110a688680a757ffffffffffffffffffff,
+//    0x1056f1b5bedf77ffffffffffffffffffff,
+//    0x0faadceceeff8bffffffffffffffffffff,
+//    0x0f05dc6b27edadffffffffffffffffffff,
+//    0x0e67a5a25da4107fffffffffffffffffff,
+//    0x0dcff115b14eedffffffffffffffffffff,
+//    0x0d3e7a392431239fffffffffffffffffff,
+//    0x0cb2ff529eb71e4fffffffffffffffffff,
+//    0x0c2d415c3db974afffffffffffffffffff,
+//    0x0bad03e7d883f69bffffffffffffffffff,
+//    0x0b320d03b2c343d5ffffffffffffffffff,
+//    0x0abc25204e02828dffffffffffffffffff,
+//    0x0a4b16f74ee4bb207fffffffffffffffff,
+//    0x09deaf736ac1f569ffffffffffffffffff,
+//    0x0976bd9952c7aa957fffffffffffffffff,
+//    0x09131271922eaa606fffffffffffffffff,
+//    0x08b380f3558668c46fffffffffffffffff,
+//    0x0857ddf0117efa215bffffffffffffffff,
+//    0x07ffffffffffffffffffffffffffffffff,
+//    0x07abbf6f6abb9d087fffffffffffffffff,
+//    0x075af62cbac95f7dfa7fffffffffffffff,
+//    0x070d7fb7452e187ac13fffffffffffffff,
+//    0x06c3390ecc8af379295fffffffffffffff,
+//    0x067c00a3b07ffc01fd6fffffffffffffff,
+//    0x0637b647c39cbb9d3d27ffffffffffffff,
+//    0x05f63b1fc104dbd39587ffffffffffffff,
+//    0x05b771955b36e12f7235ffffffffffffff,
+//    0x057b3d49dda84556d6f6ffffffffffffff,
+//    0x054183095b2c8ececf30ffffffffffffff,
+//    0x050a28be635ca2b888f77fffffffffffff,
+//    0x04d5156639708c9db33c3fffffffffffff,
+//    0x04a23105873875bd52dfdfffffffffffff,
+//    0x0471649d87199aa990756fffffffffffff,
+//    0x04429a21a029d4c1457cfbffffffffffff,
+//    0x0415bc6d6fb7dd71af2cb3ffffffffffff,
+//    0x03eab73b3bbfe282243ce1ffffffffffff,
+//    0x03c1771ac9fb6b4c18e229ffffffffffff,
+//    0x0399e96897690418f785257fffffffffff,
+//    0x0373fc456c53bb779bf0ea9fffffffffff,
+//    0x034f9e8e490c48e67e6ab8bfffffffffff,
+//    0x032cbfd4a7adc790560b3337ffffffffff,
+//    0x030b50570f6e5d2acca94613ffffffffff,
+//    0x02eb40f9f620fda6b56c2861ffffffffff,
+//    0x02cc8340ecb0d0f520a6af58ffffffffff,
+//    0x02af09481380a0a35cf1ba02ffffffffff,
+//    0x0292c5bdd3b92ec810287b1b3fffffffff,
+//    0x0277abdcdab07d5a77ac6d6b9fffffffff,
+//    0x025daf6654b1eaa55fd64df5efffffffff,
+//    0x0244c49c648baa98192dce88b7ffffffff,
+//    0x022ce03cd5619a311b2471268bffffffff,
+//    0x0215f77c045fbe885654a44a0fffffffff,
+//    0x01ffffffffffffffffffffffffffffffff,
+//    0x01eaefdbdaaee7421fc4d3ede5ffffffff,
+//    0x01d6bd8b2eb257df7e8ca57b09bfffffff,
+//    0x01c35fedd14b861eb0443f7f133fffffff,
+//    0x01b0ce43b322bcde4a56e8ada5afffffff,
+//    0x019f0028ec1fff007f5a195a39dfffffff,
+//    0x018ded91f0e72ee74f49b15ba527ffffff,
+//    0x017d8ec7f04136f4e5615fd41a63ffffff,
+//    0x016ddc6556cdb84bdc8d12d22e6fffffff,
+//    0x015ecf52776a1155b5bd8395814f7fffff,
+//    0x015060c256cb23b3b3cc3754cf40ffffff,
+//    0x01428a2f98d728ae223ddab715be3fffff,
+//    0x013545598e5c23276ccf0ede68034fffff,
+//    0x01288c4161ce1d6f54b7f61081194fffff,
+//    0x011c592761c666aa641d5a01a40f17ffff,
+//    0x0110a688680a7530515f3e6e6cfdcdffff,
+//    0x01056f1b5bedf75c6bcb2ce8aed428ffff,
+//    0x00faadceceeff8a0890f3875f008277fff,
+//    0x00f05dc6b27edad306388a600f6ba0bfff,
+//    0x00e67a5a25da41063de1495d5b18cdbfff,
+//    0x00dcff115b14eedde6fc3aa5353f2e4fff,
+//    0x00d3e7a3924312399f9aae2e0f868f8fff,
+//    0x00cb2ff529eb71e41582cccd5a1ee26fff,
+//    0x00c2d415c3db974ab32a51840c0b67edff,
+//    0x00bad03e7d883f69ad5b0a186184e06bff,
+//    0x00b320d03b2c343d4829abd6075f0cc5ff,
+//    0x00abc25204e02828d73c6e80bcdb1a95bf,
+//    0x00a4b16f74ee4bb2040a1ec6c15fbbf2df,
+//    0x009deaf736ac1f569deb1b5ae3f36c130f,
+//    0x00976bd9952c7aa957f5937d790ef65037,
+//    0x009131271922eaa6064b73a22d0bd4f2bf,
+//    0x008b380f3558668c46c91c49a2f8e967b9,
+//    0x00857ddf0117efa215952912839f6473e6
+//    ];
+    constructor()  {
         //  maxExpArray[  0] = 0x6bffffffffffffffffffffffffffffffff;
         //  maxExpArray[  1] = 0x67ffffffffffffffffffffffffffffffff;
         //  maxExpArray[  2] = 0x637fffffffffffffffffffffffffffffff;
@@ -168,36 +299,41 @@ library Power {
         maxExpArray[127] = 0x00857ddf0117efa215952912839f6473e6;
     }
 
-    /**
-      General Description:
-          Determine a value of precision.
-          Calculate an integer approximation of (_baseN / _baseD) ^ (_expN / _expD) * 2 ^ precision.
-          Return the result along with the precision used.
 
-      Detailed Description:
-          Instead of calculating "base ^ exp", we calculate "e ^ (ln(base) * exp)".
-          The value of "ln(base)" is represented with an integer slightly smaller than "ln(base) * 2 ^ precision".
-          The larger "precision" is, the more accurately this value represents the real value.
-          However, the larger "precision" is, the more bits are required in order to store this value.
-          And the exponentiation function, which takes "x" and calculates "e ^ x", is limited to a maximum exponent (maximum value of "x").
-          This maximum exponent depends on the "precision" used, and it is given by "maxExpArray[precision] >> (MAX_PRECISION - precision)".
-          Hence we need to determine the highest precision which can be used for the given input, before calling the exponentiation function.
-          This allows us to compute "base ^ exp" with maximum accuracy and without exceeding 256 bits in any of the intermediate computations.
-  */
-    function power(uint256 _baseN, uint256 _baseD, uint32 _expN, uint32 _expD) external pure returns (uint256, uint8) {
-        uint256 lnBaseTimesExp = (ln(_baseN, _baseD) * _expN) / _expD;
-        uint8 precision = findPositionInMaxExpArray(lnBaseTimesExp);
-        return (fixedExp(lnBaseTimesExp >> (MAX_PRECISION - precision), precision), precision);
+    /**
+    Compute the largest integer smaller than or equal to the binary logarithm of the input.
+    */
+    function floorLog2(uint256 _n) internal pure returns (uint8) {
+        uint8 res = 0;
+        uint256 n = _n;
+
+        if (n < 256) {
+            // At most 8 iterations
+            while (n > 1) {
+                n >>= 1;
+                res += 1;
+            }
+        } else {
+            // Exactly 8 iterations
+            for (uint8 s = 128; s > 0; s >>= 1) {
+                if (n >= (ONE << s)) {
+                    n >>= s;
+                    res |= s;
+                }
+            }
+        }
+
+        return res;
     }
 
     /**
-Return floor(ln(numerator / denominator) * 2 ^ MAX_PRECISION), where:
-- The numerator   is a value between 1 and 2 ^ (256 - MAX_PRECISION) - 1
-- The denominator is a value between 1 and 2 ^ (256 - MAX_PRECISION) - 1
-- The output      is a value between 0 and floor(ln(2 ^ (256 - MAX_PRECISION) - 1) * 2 ^ MAX_PRECISION)
-This functions assumes that the numerator is larger than or equal to the denominator, because the output would be negative otherwise.
-*/
-    function ln(uint256 _numerator, uint256 _denominator) external pure returns (uint256) {
+    Return floor(ln(numerator / denominator) * 2 ^ MAX_PRECISION), where:
+    - The numerator   is a value between 1 and 2 ^ (256 - MAX_PRECISION) - 1
+    - The denominator is a value between 1 and 2 ^ (256 - MAX_PRECISION) - 1
+    - The output      is a value between 0 and floor(ln(2 ^ (256 - MAX_PRECISION) - 1) * 2 ^ MAX_PRECISION)
+    This functions assumes that the numerator is larger than or equal to the denominator, because the output would be negative otherwise.
+    */
+    function ln(uint256 _numerator, uint256 _denominator) internal pure returns (uint256) {
         assert(_numerator <= MAX_NUM);
 
         uint256 res = 0;
@@ -224,53 +360,6 @@ This functions assumes that the numerator is larger than or equal to the denomin
         return (res * LN2_MANTISSA) >> LN2_EXPONENT;
     }
 
-    /**
-Compute the largest integer smaller than or equal to the binary logarithm of the input.
-*/
-    function floorLog2(uint256 _n) external pure returns (uint8) {
-        uint8 res = 0;
-        uint256 n = _n;
-
-        if (n < 256) {
-            // At most 8 iterations
-            while (n > 1) {
-                n >>= 1;
-                res += 1;
-            }
-        } else {
-            // Exactly 8 iterations
-            for (uint8 s = 128; s > 0; s >>= 1) {
-                if (n >= (ONE << s)) {
-                    n >>= s;
-                    res |= s;
-                }
-            }
-        }
-
-        return res;
-    }
-
-    /**
-The global "maxExpArray" is sorted in descending order, and therefore the following statements are equivalent:
-- This function finds the position of [the smallest value in "maxExpArray" larger than or equal to "x"]
-- This function finds the highest position of [a value in "maxExpArray" larger than or equal to "x"]
-*/
-    function findPositionInMaxExpArray(uint256 _x) external pure returns (uint8) {
-        uint8 lo = MIN_PRECISION;
-        uint8 hi = MAX_PRECISION;
-
-        while (lo + 1 < hi) {
-            uint8 mid = (lo + hi) / 2;
-            if (maxExpArray[mid] >= _x) lo = mid;
-            else hi = mid;
-        }
-
-        if (maxExpArray[hi] >= _x) return hi;
-        if (maxExpArray[lo] >= _x) return lo;
-
-        assert(false);
-        return 0;
-    }
 
     /**
 This function can be auto-generated by the script 'PrintFunctionFixedExp.py'.
@@ -279,7 +368,7 @@ It returns "e ^ (x / 2 ^ precision) * 2 ^ precision", that is, the result is ups
 The global "maxExpArray" maps each "precision" to "((maximumExponent + 1) << (MAX_PRECISION - precision)) - 1".
 The maximum permitted value for "x" is therefore given by "maxExpArray[precision] >> (MAX_PRECISION - precision)".
 */
-    function fixedExp(uint256 _x, uint8 _precision) external pure returns (uint256) {
+    function fixedExp(uint256 _x, uint8 _precision) internal pure returns (uint256) {
         uint256 xi = _x;
         uint256 res = 0;
 
@@ -350,4 +439,50 @@ The maximum permitted value for "x" is therefore given by "maxExpArray[precision
 
         return res / 0x688589cc0e9505e2f2fee5580000000 + _x + (ONE << _precision); // divide by 33! and then add x^1 / 1! + x^0 / 0!
     }
+
+
+    /**
+The global "maxExpArray" is sorted in descending order, and therefore the following statements are equivalent:
+- This function finds the position of [the smallest value in "maxExpArray" larger than or equal to "x"]
+- This function finds the highest position of [a value in "maxExpArray" larger than or equal to "x"]
+*/
+    function findPositionInMaxExpArray(uint256 _x) internal view returns (uint8) {
+        uint8 lo = MIN_PRECISION;
+        uint8 hi = MAX_PRECISION;
+
+        while (lo + 1 < hi) {
+            uint8 mid = (lo + hi) / 2;
+            if (maxExpArray[mid] >= _x) lo = mid;
+            else hi = mid;
+        }
+
+        if (maxExpArray[hi] >= _x) return hi;
+        if (maxExpArray[lo] >= _x) return lo;
+
+        assert(false);
+        return 0;
+    }
+
+    /**
+      General Description:
+          Determine a value of precision.
+          Calculate an integer approximation of (_baseN / _baseD) ^ (_expN / _expD) * 2 ^ precision.
+          Return the result along with the precision used.
+
+      Detailed Description:
+          Instead of calculating "base ^ exp", we calculate "e ^ (ln(base) * exp)".
+          The value of "ln(base)" is represented with an integer slightly smaller than "ln(base) * 2 ^ precision".
+          The larger "precision" is, the more accurately this value represents the real value.
+          However, the larger "precision" is, the more bits are required in order to store this value.
+          And the exponentiation function, which takes "x" and calculates "e ^ x", is limited to a maximum exponent (maximum value of "x").
+          This maximum exponent depends on the "precision" used, and it is given by "maxExpArray[precision] >> (MAX_PRECISION - precision)".
+          Hence we need to determine the highest precision which can be used for the given input, before calling the exponentiation function.
+          This allows us to compute "base ^ exp" with maximum accuracy and without exceeding 256 bits in any of the intermediate computations.
+  */
+    function power(uint256 _baseN, uint256 _baseD, uint32 _expN, uint32 _expD) internal view returns (uint256, uint8) {
+        uint256 lnBaseTimesExp = (ln(_baseN, _baseD) * _expN) / _expD;
+        uint8 precision = findPositionInMaxExpArray(lnBaseTimesExp);
+        return (fixedExp(lnBaseTimesExp >> (MAX_PRECISION - precision), precision), precision);
+    }
+
 }

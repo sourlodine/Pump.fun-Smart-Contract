@@ -7,7 +7,7 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 contract Token is ERC20, Ownable {
     address public tokenFactory;
 
-    constructor(string memory name, string memory symbol, address _tokenFactory) ERC20(name, symbol) {
+    constructor(string memory name, string memory symbol, address _tokenFactory) ERC20(name, symbol) Ownable(msg.sender) {
         require(_tokenFactory != address(0), "Bonding curve address cannot be zero");
         tokenFactory = _tokenFactory;
     }
