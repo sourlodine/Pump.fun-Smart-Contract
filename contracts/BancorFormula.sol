@@ -1,7 +1,7 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.8.26;
 
 import "./Power.sol";
-import "zeppelin-solidity/contracts/math/SafeMath.sol";
+import "@openzeppelin/contracts/utils/math/Math.sol";
 
 /**
  * @title Bancor formula by Bancor
@@ -11,10 +11,8 @@ import "zeppelin-solidity/contracts/math/SafeMath.sol";
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements;
  * and to You under the Apache License, Version 2.0. "
  */
-contract BancorFormula is Power {
-    using SafeMath for uint256;
-
-    string public version = "0.3";
+library BancorFormula {
+    string public version = "0.3.1";
     uint32 private constant MAX_WEIGHT = 1000000;
 
     /**
@@ -36,7 +34,7 @@ contract BancorFormula is Power {
         uint256 _connectorBalance,
         uint32 _connectorWeight,
         uint256 _depositAmount
-    ) public constant returns (uint256) {
+    ) public pure returns (uint256) {
         // validate input
         require(_supply > 0 && _connectorBalance > 0 && _connectorWeight > 0 && _connectorWeight <= MAX_WEIGHT);
 
@@ -47,14 +45,14 @@ contract BancorFormula is Power {
 
         // special case if the weight = 100%
         if (_connectorWeight == MAX_WEIGHT) {
-            return _supply.mul(_depositAmount).div(_connectorBalance);
+            return (_supply * _depositAmount) / _connectorBalance;
         }
 
         uint256 result;
         uint8 precision;
         uint256 baseN = _depositAmount.add(_connectorBalance);
-        (result, precision) = power(baseN, _connectorBalance, _connectorWeight, MAX_WEIGHT);
-        uint256 temp = _supply.mul(result) >> precision;
+        (result, precision) = Power.power(baseN, _connectorBalance, _connectorWeight, MAX_WEIGHT);
+        uint256 temp = (_supply * result) >> precision;
         return temp - _supply;
     }
 
@@ -72,7 +70,7 @@ contract BancorFormula is Power {
      *
      * @return sale return amount
      */
-    function calculateSaleReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _sellAmount) public constant returns (uint256) {
+    function calculateSaleReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _sellAmount) public pure returns (uint256) {
         // validate input
         require(_supply > 0 && _connectorBalance > 0 && _connectorWeight > 0 && _connectorWeight <= MAX_WEIGHT && _sellAmount <= _supply);
 
@@ -88,15 +86,15 @@ contract BancorFormula is Power {
 
         // special case if the weight = 100%
         if (_connectorWeight == MAX_WEIGHT) {
-            return _connectorBalance.mul(_sellAmount).div(_supply);
+            return (_connectorBalance * _sellAmount) / _supply;
         }
 
         uint256 result;
         uint8 precision;
         uint256 baseD = _supply - _sellAmount;
-        (result, precision) = power(_supply, baseD, MAX_WEIGHT, _connectorWeight);
-        uint256 oldBalance = _connectorBalance.mul(result);
+        (result, precision) = Power.power(_supply, baseD, MAX_WEIGHT, _connectorWeight);
+        uint256 oldBalance = _connectorBalance * result;
         uint256 newBalance = _connectorBalance << precision;
-        return oldBalance.sub(newBalance).div(result);
+        return (oldBalance - newBalance) / result;
     }
 }

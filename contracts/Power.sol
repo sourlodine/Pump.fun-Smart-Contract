@@ -1,4 +1,4 @@
-pragma solidity ^0.4.18;
+pragma solidity ^0.8.26;
 
 /**
  * bancor formula by bancor
@@ -8,8 +8,8 @@ pragma solidity ^0.4.18;
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements;
  * and to You under the Apache License, Version 2.0. "
  */
-contract Power {
-    string public version = "0.3";
+library Power {
+    string public version = "0.3.1";
 
     uint256 private constant ONE = 1;
     uint32 private constant MAX_WEIGHT = 1000000;
@@ -184,7 +184,7 @@ contract Power {
           Hence we need to determine the highest precision which can be used for the given input, before calling the exponentiation function.
           This allows us to compute "base ^ exp" with maximum accuracy and without exceeding 256 bits in any of the intermediate computations.
   */
-    function power(uint256 _baseN, uint256 _baseD, uint32 _expN, uint32 _expD) internal constant returns (uint256, uint8) {
+    function power(uint256 _baseN, uint256 _baseD, uint32 _expN, uint32 _expD) external pure returns (uint256, uint8) {
         uint256 lnBaseTimesExp = (ln(_baseN, _baseD) * _expN) / _expD;
         uint8 precision = findPositionInMaxExpArray(lnBaseTimesExp);
         return (fixedExp(lnBaseTimesExp >> (MAX_PRECISION - precision), precision), precision);
@@ -197,7 +197,7 @@ Return floor(ln(numerator / denominator) * 2 ^ MAX_PRECISION), where:
 - The output      is a value between 0 and floor(ln(2 ^ (256 - MAX_PRECISION) - 1) * 2 ^ MAX_PRECISION)
 This functions assumes that the numerator is larger than or equal to the denominator, because the output would be negative otherwise.
 */
-    function ln(uint256 _numerator, uint256 _denominator) internal constant returns (uint256) {
+    function ln(uint256 _numerator, uint256 _denominator) external pure returns (uint256) {
         assert(_numerator <= MAX_NUM);
 
         uint256 res = 0;
@@ -227,7 +227,7 @@ This functions assumes that the numerator is larger than or equal to the denomin
     /**
 Compute the largest integer smaller than or equal to the binary logarithm of the input.
 */
-    function floorLog2(uint256 _n) internal constant returns (uint8) {
+    function floorLog2(uint256 _n) external pure returns (uint8) {
         uint8 res = 0;
         uint256 n = _n;
 
@@ -255,7 +255,7 @@ The global "maxExpArray" is sorted in descending order, and therefore the follow
 - This function finds the position of [the smallest value in "maxExpArray" larger than or equal to "x"]
 - This function finds the highest position of [a value in "maxExpArray" larger than or equal to "x"]
 */
-    function findPositionInMaxExpArray(uint256 _x) internal constant returns (uint8) {
+    function findPositionInMaxExpArray(uint256 _x) external pure returns (uint8) {
         uint8 lo = MIN_PRECISION;
         uint8 hi = MAX_PRECISION;
 
@@ -279,7 +279,7 @@ It returns "e ^ (x / 2 ^ precision) * 2 ^ precision", that is, the result is ups
 The global "maxExpArray" maps each "precision" to "((maximumExponent + 1) << (MAX_PRECISION - precision)) - 1".
 The maximum permitted value for "x" is therefore given by "maxExpArray[precision] >> (MAX_PRECISION - precision)".
 */
-    function fixedExp(uint256 _x, uint8 _precision) internal constant returns (uint256) {
+    function fixedExp(uint256 _x, uint8 _precision) external pure returns (uint256) {
         uint256 xi = _x;
         uint256 res = 0;
 
