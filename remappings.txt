@@ -8,5 +8,6 @@ forge-std/=lib/forge-std/src/
 halmos-cheatcodes/=lib/openzeppelin-contracts-upgradeable/lib/halmos-cheatcodes/src/
 openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
 openzeppelin-contracts/=lib/openzeppelin-contracts/
+solady/=lib/solady/src/
 v2-core/=lib/v2-core/contracts/
 v2-periphery/=lib/v2-periphery/contracts/
