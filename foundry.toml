@@ -2,3 +2,7 @@
 src = "contracts"
 out = "out"
 libs = ["lib"]
+solc_version = '0.8.26'
+optimizer = true
+optimizer_runs = 18_000
+evm_version="Istanbul"
