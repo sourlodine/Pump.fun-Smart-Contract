@@ -13,7 +13,7 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  */
 contract BancorFormula is Power {
     string public constant version = "0.3.1";
-    uint32 private constant MAX_WEIGHT = 1000000;
+    uint32 public constant MAX_WEIGHT = 1000000;
 
     /**
      * @dev given a token supply, connector balance, weight and a deposit amount (in the connector token),
