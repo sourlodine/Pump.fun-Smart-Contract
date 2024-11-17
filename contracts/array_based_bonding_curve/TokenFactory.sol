@@ -46,7 +46,7 @@ contract TokenFactory is Ownable {
     event DailyWinnerUpdated(address winner);
     event TokenAdded(address token, string name, string symbol);
 
-    constructor(address _reserveToken, address _bondingCurve) {
+    constructor(address _reserveToken, address _bondingCurve) Ownable(msg.sender) {
         reserveToken = IERC20(_reserveToken);
         bondingCurve = BondingCurve(_bondingCurve);
     }

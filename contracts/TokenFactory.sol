@@ -8,7 +8,7 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-import {BondingCurve} from "./BondingCurve.sol";
+import {BancorBondingCurve} from "./BancorBondingCurve.sol";
 import {Token} from "./Token.sol";
 
 contract TokenFactory is ReentrancyGuard, Ownable {
@@ -31,7 +31,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     address public immutable tokenImplementation;
     address public uniswapV2Router;
     address public uniswapV2Factory;
-    BondingCurve public bondingCurve;
+    BancorBondingCurve public bondingCurve;
     uint256 public feePercent; // bp
     uint256 public fee;
 
@@ -87,14 +87,14 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         tokenImplementation = _tokenImplementation;
         uniswapV2Router = _uniswapV2Router;
         uniswapV2Factory = _uniswapV2Factory;
-        bondingCurve = BondingCurve(_bondingCurve);
+        bondingCurve = BancorBondingCurve(_bondingCurve);
         feePercent = _feePercent;
     }
 
     // Admin functions
 
     function setBondingCurve(address _bondingCurve) external onlyOwner {
-        bondingCurve = BondingCurve(_bondingCurve);
+        bondingCurve = BancorBondingCurve(_bondingCurve);
     }
 
     function setFeePercent(uint256 _feePercent) external onlyOwner {
@@ -158,7 +158,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
             : 0;
         fee += _fee;
         Token token = Token(tokenAddress);
-        uint256 amount = bondingCurve.getAmountOut(
+        uint256 amount = bondingCurve.computeMintingAmountFromPrice(
+            collateral[tokenAddress],
             token.totalSupply(),
             contributionWithoutFee
         );
@@ -197,7 +198,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         );
         require(amount > 0, "Amount should be greater than zero");
         Token token = Token(tokenAddress);
-        uint256 receivedETH = bondingCurve.getFundsReceived(
+        uint256 receivedETH = bondingCurve.computeRefundForBurning(
+            collateral[tokenAddress],
             token.totalSupply(),
             amount
         );
@@ -282,12 +284,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 mintedAmount = _buy(winnerToken, msg.sender, receivedETH);
 
         emit BurnTokenAndMintWinner(
-            msg.sender, 
-            tokenAddress, 
-            winnerToken, 
-            burnedAmount, 
+            msg.sender,
+            tokenAddress,
+            winnerToken,
+            burnedAmount,
             receivedETH,
-            mintedAmount, 
+            mintedAmount,
             block.timestamp
         );
     }
