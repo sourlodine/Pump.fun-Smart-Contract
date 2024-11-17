@@ -1,0 +1,18 @@
+[submodule "lib/openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/v2-core"]
+	path = lib/v2-core
+	url = https://github.com/uniswap/v2-core
+[submodule "lib/v2-periphery"]
+	path = lib/v2-periphery
+	url = https://github.com/Uniswap/v2-periphery
+[submodule "lib/openzeppelin-contracts-upgradeable"]
+	path = lib/openzeppelin-contracts-upgradeable
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable
+[submodule "lib/solady"]
+	path = lib/solady
+	url = https://github.com/vectorized/solady
