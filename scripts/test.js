@@ -10,7 +10,7 @@ async function createToken(tokenFactory, name, symbol) {
 
     const addedTokenAddress = receipt.events.find(e => e.event === 'TokenCreated')?.args.token;
 
-    console.log(`${symbol} tokenAddress: `, addedTokenAddress);
+    // console.log(`${symbol} tokenAddress: `, addedTokenAddress);
 
     return addedTokenAddress;
 }
