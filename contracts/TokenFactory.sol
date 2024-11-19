@@ -28,10 +28,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public constant FEE_DENOMINATOR = 10000;
 
     mapping(address => TokenState) public tokens;
-    mapping(uint => address) private tokensAddresses;
-    uint totalTokensAddresses;
 
-    mapping(address => uint256) public creationDate;
+    mapping(uint256 => mapping(uint => address)) public tokensByCompetitionId;
+    mapping(uint256 => uint) public totalTokensByCompetitionId;
+
+    mapping(address => uint256) public competitionIds;
+    uint256 public currentCompetitionId = 0;
 
     mapping(address => uint256) public collateral;
     address public immutable tokenImplementation;
@@ -40,11 +42,9 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     BancorBondingCurve public bondingCurve;
     uint256 public feePercent; // bp
     uint256 public fee;
-    uint256 public maxFundingRateInterval = 1 days;
 
-    mapping(address => uint256) public winners;
-
-    mapping(uint256 => mapping(address => uint256)) public collateralByDay;
+    mapping(uint256 => address) public winners;
+    mapping(uint256 => mapping(address => uint256)) public collateralById;
 
     // Events
     event TokenCreated(
@@ -53,6 +53,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         string symbol,
         string uri,
         address creator,
+        uint256 competitionId,
         uint256 timestamp
     );
 
@@ -74,7 +75,11 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 timestamp
     );
 
-    event SetWinner(address indexed winner, uint256 timestamp);
+    event SetWinner(
+        address indexed winner, 
+        uint256 competitionId,
+        uint256 timestamp
+    );
 
     event BurnTokenAndMintWinner(
         address indexed sender,
@@ -100,10 +105,18 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         feePercent = _feePercent;
     }
 
+    modifier inCompetition(address tokenAddress) {
+        require(
+            competitionIds[tokenAddress] == currentCompetitionId,
+            "The competition for this token has already ended"
+        );
+        _;
+    }
+
     // Admin functions
 
-    function setMaxFundingRateInterval(uint256 interval) external onlyOwner {
-        maxFundingRateInterval = interval;
+    function startNewCompetition() external onlyOwner {
+        currentCompetitionId = currentCompetitionId + 1;
     }
 
     function setBondingCurve(address _bondingCurve) external onlyOwner {
@@ -120,10 +133,6 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         fee = 0;
     }
 
-    function startOfCurrentDay() public view returns (uint256) {
-        return (block.timestamp.div(1 days).mul(1 days));
-    }
-
     // Token functions
 
     function createToken(
@@ -136,10 +145,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         token.initialize(name, symbol, uri, address(this));
         tokens[tokenAddress] = TokenState.FUNDING;
 
-        tokensAddresses[totalTokensAddresses] = tokenAddress;
-        totalTokensAddresses++;
+        uint _totalTokensByCompetitionId = totalTokensByCompetitionId[currentCompetitionId];
 
-        creationDate[tokenAddress] = startOfCurrentDay();
+        tokensByCompetitionId[currentCompetitionId][_totalTokensByCompetitionId] = tokenAddress;
+        totalTokensByCompetitionId[currentCompetitionId] = _totalTokensByCompetitionId + 1;
+
+        competitionIds[tokenAddress] = currentCompetitionId;
 
         emit TokenCreated(
             tokenAddress,
@@ -147,19 +158,14 @@ contract TokenFactory is ReentrancyGuard, Ownable {
             symbol,
             uri,
             msg.sender,
+            currentCompetitionId,
             block.timestamp
         );
 
         return tokenAddress;
     }
 
-    function buy(address tokenAddress) external payable nonReentrant {
-        require(
-            block.timestamp.sub(creationDate[tokenAddress]) <
-                maxFundingRateInterval,
-            "Operation allowed only during the funding rate interval"
-        );
-
+    function buy(address tokenAddress) external payable nonReentrant inCompetition(tokenAddress) {
         _buy(tokenAddress, msg.sender, msg.value);
     }
 
@@ -199,13 +205,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
 
         collateral[tokenAddress] = tokenCollateral;
 
-        // store collateralByDay for winner detecting
-        uint256 currentDay = startOfCurrentDay();
-        uint256 tokenCollateralToday = collateralByDay[currentDay][
-            tokenAddress
-        ];
-        tokenCollateralToday += contributionWithoutFee;
-        collateralByDay[currentDay][tokenAddress] = tokenCollateralToday;
+        // store collateralById for winner detecting
+        collateralById[currentCompetitionId][tokenAddress] += contributionWithoutFee;
 
         // TODO - return left not working for burnTokenAndMintWinner case
         // return left
@@ -221,13 +222,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (amount);
     }
 
-    function sell(address tokenAddress, uint256 amount) external nonReentrant {
-        require(
-            block.timestamp.sub(creationDate[tokenAddress]) <
-                maxFundingRateInterval,
-            "Operation allowed only during the funding rate interval"
-        );
-
+    function sell(address tokenAddress, uint256 amount) external nonReentrant inCompetition(tokenAddress) {
         _sell(tokenAddress, amount, msg.sender, msg.sender);
     }
 
@@ -258,8 +253,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         //slither-disable-next-line arbitrary-send-eth
 
         // store collateralByDay for winner detecting
-        uint256 currentDay = startOfCurrentDay();
-        collateralByDay[currentDay][tokenAddress] -= receivedETH;
+        collateralById[currentCompetitionId][tokenAddress] -= receivedETH;
 
         if (to != address(this)) {
             (bool success, ) = to.call{value: receivedETH}(new bytes(0));
@@ -314,16 +308,18 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (_amount * _feePercent) / FEE_DENOMINATOR;
     }
 
-    function getWinnerByDay(uint256 day) public view returns (address) {
-        uint256 maxDayCollateral = 0;
+    function getWinnerByCompetitionId(uint256 competitionId) public view returns (address) {
+        uint256 maxCollateral = 0;
         address winnerAddress;
 
-        for (uint256 i = 0; i < totalTokensAddresses; i++) {
-            address tokenAddress = tokensAddresses[i];
-            uint256 _collateral = collateralByDay[day][tokenAddress];
+        uint _totalTokens = totalTokensByCompetitionId[competitionId];
 
-            if (_collateral > maxDayCollateral) {
-                maxDayCollateral = _collateral;
+        for (uint256 i = 0; i < _totalTokens; i++) {
+            address tokenAddress = tokensByCompetitionId[competitionId][i];
+            uint256 _collateral = collateralById[competitionId][tokenAddress];
+
+            if (_collateral > maxCollateral) {
+                maxCollateral = _collateral;
                 winnerAddress = tokenAddress;
             }
         }
@@ -331,20 +327,25 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return winnerAddress;
     }
 
-    function setWinner() external {
-        uint256 prevDay = startOfCurrentDay().sub(1 days);
-        address winnerAddress = getWinnerByDay(prevDay);
+    function setWinnerByCompetitionId(uint256 competitionId) external {
+        require(competitionId != currentCompetitionId, 'The competition is still active');
 
-        winners[winnerAddress] = prevDay;
+        address winnerAddress = getWinnerByCompetitionId(competitionId);
 
-        emit SetWinner(winnerAddress, prevDay);
+        if(winners[competitionId] != winnerAddress) {
+            winners[competitionId] = winnerAddress;
+            emit SetWinner(winnerAddress, competitionId, block.timestamp);
+        }
     }
 
     function burnTokenAndMintWinner(
         address tokenAddress
     ) external nonReentrant {
-        uint256 _creationDate = creationDate[tokenAddress];
-        address winnerToken = getWinnerByDay(_creationDate);
+        uint256 _competitionId = competitionIds[tokenAddress];
+        
+        require(_competitionId != currentCompetitionId, 'The competition is still active');
+
+        address winnerToken = getWinnerByCompetitionId(_competitionId);
 
         require(winnerToken != tokenAddress, "token address is the winner");
 
