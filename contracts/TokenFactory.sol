@@ -35,7 +35,6 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     mapping(address => uint256) public competitionIds;
     uint256 public currentCompetitionId = 0;
 
-    mapping(address => uint256) public collateral;
     address public immutable tokenImplementation;
     address public uniswapV2Router;
     address public uniswapV2Factory;
@@ -178,7 +177,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         require(valueToBuy > 0, "ETH not enough");
         // calculate fee
         uint256 valueToReturn;
-        uint256 tokenCollateral = collateral[tokenAddress];
+        uint256 _competitionId = competitionIds[tokenAddress];
+        uint256 tokenCollateral = collateralById[_competitionId][tokenAddress];
 
         uint256 remainingEthNeeded = FUNDING_GOAL - tokenCollateral;
         uint256 contributionWithoutFee = (valueToBuy * FEE_DENOMINATOR) /
@@ -194,7 +194,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         fee += _fee;
         Token token = Token(tokenAddress);
         uint256 amount = bondingCurve.computeMintingAmountFromPrice(
-            collateral[tokenAddress],
+            collateralById[_competitionId][tokenAddress],
             token.totalSupply(),
             contributionWithoutFee
         );
@@ -203,10 +203,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         tokenCollateral += contributionWithoutFee;
         token.mint(receiver, amount);
 
-        collateral[tokenAddress] = tokenCollateral;
-
-        // store collateralById for winner detecting
-        collateralById[currentCompetitionId][tokenAddress] += contributionWithoutFee;
+        collateralById[_competitionId][tokenAddress] = tokenCollateral;
 
         // TODO - return left not working for burnTokenAndMintWinner case
         // return left
@@ -237,9 +234,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
             "Token is not funding"
         );
         require(amount > 0, "Amount should be greater than zero");
+        
         Token token = Token(tokenAddress);
+        uint256 _competitionId = competitionIds[tokenAddress];
+
         uint256 receivedETH = bondingCurve.computeRefundForBurning(
-            collateral[tokenAddress],
+            collateralById[_competitionId][tokenAddress],
             token.totalSupply(),
             amount
         );
@@ -248,12 +248,9 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         receivedETH -= _fee;
         fee += _fee;
         token.burn(from, amount);
-        collateral[tokenAddress] -= receivedETH;
+        collateralById[_competitionId][tokenAddress] -= receivedETH;
         // send ether
         //slither-disable-next-line arbitrary-send-eth
-
-        // store collateralByDay for winner detecting
-        collateralById[currentCompetitionId][tokenAddress] -= receivedETH;
 
         if (to != address(this)) {
             (bool success, ) = to.call{value: receivedETH}(new bytes(0));
