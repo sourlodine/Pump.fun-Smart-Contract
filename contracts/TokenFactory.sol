@@ -29,8 +29,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
 
     mapping(address => TokenState) public tokens;
 
-    mapping(uint256 => mapping(uint => address)) public tokensByCompetitionId;
-    mapping(uint256 => uint) public totalTokensByCompetitionId;
+    mapping(uint256 => address[]) public tokensByCompetitionId;
 
     mapping(address => uint256) public competitionIds;
     uint256 public currentCompetitionId = 0;
@@ -144,10 +143,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         token.initialize(name, symbol, uri, address(this));
         tokens[tokenAddress] = TokenState.FUNDING;
 
-        uint _totalTokensByCompetitionId = totalTokensByCompetitionId[currentCompetitionId];
-
-        tokensByCompetitionId[currentCompetitionId][_totalTokensByCompetitionId] = tokenAddress;
-        totalTokensByCompetitionId[currentCompetitionId] = _totalTokensByCompetitionId + 1;
+        tokensByCompetitionId[currentCompetitionId].push(tokenAddress);
 
         competitionIds[tokenAddress] = currentCompetitionId;
 
@@ -309,9 +305,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 maxCollateral = 0;
         address winnerAddress;
 
-        uint _totalTokens = totalTokensByCompetitionId[competitionId];
-
-        for (uint256 i = 0; i < _totalTokens; i++) {
+        for (uint256 i = 0; i < tokensByCompetitionId[competitionId].length; i++) {
             address tokenAddress = tokensByCompetitionId[competitionId][i];
             uint256 _collateral = collateralById[competitionId][tokenAddress];
 
