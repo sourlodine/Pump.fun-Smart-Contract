@@ -6,8 +6,10 @@ solc_version = '0.8.26'
 optimizer = true
 optimizer_runs = 18_000
 evm_version="Istanbul"
+no_match_path = "contracts/*"
 
 remappings = [
     '@uniswap/v2-core/contracts/=lib/v2-core/contracts/',
     '@uniswap/v2-periphery/contracts/=lib/v2-periphery/contracts/',
+    '@contracts/=contracts/'
 ]
