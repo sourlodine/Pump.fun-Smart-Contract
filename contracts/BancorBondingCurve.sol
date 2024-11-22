@@ -28,8 +28,7 @@ contract BancorBondingCurve is BancorFormula {
         }
 //        return calculateSaleReturn(supply + k, b, reserveRatio, k);
         uint256 pp = calculateSaleReturn(supply + k, b, reserveRatio, k);
-        uint256 p = b * pp / (b - pp);
-        return p;
+        p = b * pp / (b - pp);
     }
 
     // buy function
@@ -56,7 +55,6 @@ contract BancorBondingCurve is BancorFormula {
             return supply;
         }
         uint256 k0 = calculatePurchaseReturn(supply, b - p, reserveRatio, p);
-        uint256 k = (k0 * supply) / (k0 + supply);
-        return k;
+        k = (k0 * supply) / (k0 + supply);
     }
 }
