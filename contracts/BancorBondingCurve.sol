@@ -26,7 +26,10 @@ contract BancorBondingCurve is BancorFormula {
             (result, precision) = power(k, 1, MAX_WEIGHT, reserveRatio);
             return ((slope * reserveRatio) / MAX_WEIGHT) >> precision;
         }
-        return calculateSaleReturn(supply + k, b, reserveRatio, k);
+//        return calculateSaleReturn(supply + k, b, reserveRatio, k);
+        uint256 pp = calculateSaleReturn(supply + k, b, reserveRatio, k);
+        uint256 p = b * pp / (b - pp);
+        return p;
     }
 
     // buy function
