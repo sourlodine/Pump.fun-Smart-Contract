@@ -14,7 +14,7 @@ contract BancorBondingCurveTest is Test {
         quadraticCurve = new BancorBondingCurve((SLOPE_SCALE * 1) / 2, MAX_WEIGHT * (2 + 1));
     }
 
-    function test_BuySellEquivalence() public {
+    function test_BuySellEquivalenceLinear() public {
         uint256 b = 1 ether;
         uint256 supply = 1000 ether;
         uint256 p = 0.5 ether;
@@ -22,5 +22,11 @@ contract BancorBondingCurveTest is Test {
         uint256 mintingAmount = linearCurve.computeMintingAmountFromPrice(b, supply, p);
         uint256 burningAmount = linearCurve.computeBurningAmountFromRefund(b + p, supply + mintingAmount, p);
         assertEqUint(mintingAmount, burningAmount);
+        uint256 k = 50 ether;
+        uint256 price = linearCurve.computePriceForMinting(b, supply, k);
+        uint256 refund = linearCurve.computeRefundForBurning(b + price, supply + k, k);
+        assertEqUint(price, refund);
     }
+
+
 }
