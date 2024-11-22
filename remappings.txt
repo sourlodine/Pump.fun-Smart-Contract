@@ -1,5 +1,6 @@
 @uniswap/v2-core/contracts/=lib/v2-core/contracts/
 @uniswap/v2-periphery/contracts/=lib/v2-periphery/contracts/
+@contracts/=contracts/
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 ds-test/=lib/openzeppelin-contracts-upgradeable/lib/forge-std/lib/ds-test/src/
