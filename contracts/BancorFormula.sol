@@ -13,7 +13,12 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
  */
 contract BancorFormula is Power {
     string public constant version = "0.3.1";
-    uint32 public constant MAX_WEIGHT = 1000000;
+
+    error ConnectorWeightExceeded();
+    error SellAmountExceededSupply();
+    error ZeroSupply();
+    error ZeroBalance();
+    error ZeroConnectorWeight();
 
     /**
      * @dev given a token supply, connector balance, weight and a deposit amount (in the connector token),
@@ -36,7 +41,18 @@ contract BancorFormula is Power {
         uint256 _depositAmount
     ) internal view returns (uint256) {
         // validate input
-        require(_supply > 0 && _connectorBalance > 0 && _connectorWeight > 0 && _connectorWeight <= MAX_WEIGHT);
+        if (_supply == 0) {
+            revert ZeroSupply();
+        }
+        if (_connectorBalance == 0) {
+            revert ZeroBalance();
+        }
+        if (_connectorWeight == 0) {
+            revert ZeroConnectorWeight();
+        }
+        if (_connectorWeight > MAX_WEIGHT) {
+            revert ConnectorWeightExceeded();
+        }
 
         // special case for 0 deposit amount
         if (_depositAmount == 0) {
@@ -73,6 +89,22 @@ contract BancorFormula is Power {
     function calculateSaleReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _sellAmount) internal view returns (uint256) {
         // validate input
         require(_supply > 0 && _connectorBalance > 0 && _connectorWeight > 0 && _connectorWeight <= MAX_WEIGHT && _sellAmount <= _supply);
+        // validate input
+        if (_supply == 0) {
+            revert ZeroSupply();
+        }
+        if (_connectorBalance == 0) {
+            revert ZeroBalance();
+        }
+        if (_connectorWeight == 0) {
+            revert ZeroConnectorWeight();
+        }
+        if (_connectorWeight > MAX_WEIGHT) {
+            revert ConnectorWeightExceeded();
+        }
+        if (_sellAmount > _supply) {
+            revert SellAmountExceededSupply();
+        }
 
         // special case for 0 sell amount
         if (_sellAmount == 0) {
