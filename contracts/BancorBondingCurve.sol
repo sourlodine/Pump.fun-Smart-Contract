@@ -1,5 +1,4 @@
 pragma solidity ^0.8.26;
-
 import "./BancorFormula.sol";
 
 uint256 constant SLOPE_SCALE = 10000;
@@ -26,7 +25,6 @@ contract BancorBondingCurve is BancorFormula {
             (result, precision) = power(k, 1, MAX_WEIGHT, reserveRatio);
             return ((slope * reserveRatio * result) / SLOPE_SCALE / MAX_WEIGHT) >> precision;
         }
-//        return calculateSaleReturn(supply + k, b, reserveRatio, k);
         uint256 pp = calculateSaleReturn(supply + k, b, reserveRatio, k);
         p = b * pp / (b - pp);
     }
