@@ -13,10 +13,41 @@ contract BancorBondingCurveDetail is Script, Power {
     function run() public {
         curve = new BancorBondingCurve(SLOPE_SCALED, WEIGHT_SCALED);
         //        curve = new BancorBondingCurve(SLOPE * SLOPE_SCALE, MAX_WEIGHT / (1 + N));
-        printIncremental();
+//        mintingByAmountIncremental();
+        mintingByPriceIncremental();
     }
 
-    function printIncremental() public {
+    function mintingByPriceIncremental() public {
+        uint256 numIncrements = vm.envUint("NUM_INCREMENTS");
+        uint256 b = 0;
+        uint256 supply = 0;
+        uint256 totalPrice = vm.envUint("PRICE");
+        uint256 perIncrementPrice = totalPrice / numIncrements;
+        for (uint256 i = 0; i < numIncrements; i++) {
+            uint256 k = curve.computeMintingAmountFromPrice(b, supply, perIncrementPrice);
+            console.log("b = %s | supply = %s | p = %s", b, supply, k);
+            supply += k;
+            b += perIncrementPrice;
+        }
+        console.log("b = %s supply = %s", b, supply);
+        //        p = ((totalMintAmount ** (N + 1)) * SLOPE_SCALED) / (N + 1) / SLOPE_SCALE;
+        // totalMintAmount = log(p * SLOPE_SCALE * (N+1) / SLOPE_SCALED) / (N+1)
+
+//        uint256 estimated = ((supply ** (1 + 3)) * SLOPE_SCALED) / (1 + 3) / SLOPE_SCALE;
+
+        uint256 result;
+        uint256 precision;
+        (result, precision) = power(supply , 1, MAX_WEIGHT, WEIGHT_SCALED);
+        uint256 estimated = ((result * SLOPE_SCALED * WEIGHT_SCALED) / MAX_WEIGHT / SLOPE_SCALE) >> precision;
+
+        console.log("diff = %s", int256(estimated) - int256(b));
+        console.log("| precision = %s", int256(precision));
+        console.log("| result = %s", int256(result));
+        console.log("diff% = %e", ((int256(estimated) - int256(b)) * 1 ether) / int256(estimated));
+
+    }
+
+    function mintingByAmountIncremental() public {
         uint256 numIncrements = vm.envUint("NUM_INCREMENTS");
         uint256 b = 0;
         uint256 supply = 0;
@@ -31,7 +62,7 @@ contract BancorBondingCurveDetail is Script, Power {
             b += p;
             supply += perIncrementMintAmount;
         }
-        console.log("b= %s supply= %s", b, supply);
+        console.log("b = %s supply = %s", b, supply);
 
         //        uint256 estimated = ((totalMintAmount ** (N + 1)) * SLOPE) / (N + 1);
         uint256 result;
