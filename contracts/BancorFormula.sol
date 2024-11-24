@@ -1,132 +1,123 @@
 pragma solidity ^0.8.26;
 
-import "./Power.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import {UD60x18, ud, div, sub, add, pow, mul, eq, isZero, gt, convert} from "@prb/math/src/UD60x18.sol";
+
+uint32 constant MAX_WEIGHT = 1000000;
 
 /**
- * @title Bancor formula by Bancor
- * @dev Modified from the original by Slava Balasanov
+ * @title Bancor formula
+ * @dev This new version is developed separately and fixed errors resulted from inaccurate power functions from previous versions.
+ * The previous version was developed by Slava Balasanov, modified from formula originally developed by Bancor.
  * https://github.com/bancorprotocol/contracts
- * Split Power.sol out from BancorFormula.sol and replace SafeMath formulas with zeppelin's SafeMath
  * Licensed to the Apache Software Foundation (ASF) under one or more contributor license agreements;
  * and to You under the Apache License, Version 2.0. "
  */
-contract BancorFormula is Power {
-    string public constant version = "0.3.1";
+contract BancorFormula {
+    string public constant version = "0.4";
 
-    error ConnectorWeightExceeded();
+    error WeightExceeded();
     error SellAmountExceededSupply();
     error ZeroSupply();
     error ZeroBalance();
-    error ZeroConnectorWeight();
+    error ZeroWeight();
 
     /**
-     * @dev given a token supply, connector balance, weight and a deposit amount (in the connector token),
-     * calculates the return for a given conversion (in the main token)
+     * @dev given a token supply, contract balance, curve weight and a deposit amount (in native token),
+     * calculates the amount of contract tokens to be minted
      *
      * Formula:
-     * Return = _supply * ((1 + _depositAmount / _connectorBalance) ^ (_connectorWeight / 1000000) - 1)
+     * k = s * ((1 + p / b) ^ (w / 1000000) - 1)
      *
-     * @param _supply              token total supply
-     * @param _connectorBalance    total connector balance
-     * @param _connectorWeight     connector weight, represented in ppm, 1-1000000
-     * @param _depositAmount       deposit amount, in connector token
+     * @param s    token total supply, in 18-decimal fixed point format (UD60x18)
+     * @param b    current total contract balance,  in 18-decimal fixed point format (UD60x18)
+     * @param w    curve weight, represented in 6-decimal fixed point, with the range of 1 - 1000000
+     * @param p    amount of native token to be deposited, in 18-decimal fixed point format
      *
-     *  @return purchase return amount
+     * @return k   the amount of contract tokens to be minted for the given deposit, in 18-decimal fixed point format (UD60x18)
      */
     function calculatePurchaseReturn(
-        uint256 _supply,
-        uint256 _connectorBalance,
-        uint32 _connectorWeight,
-        uint256 _depositAmount
-    ) internal view returns (uint256) {
-        // validate input
-        if (_supply == 0) {
+        UD60x18 s,
+        UD60x18 b,
+        uint32 w,
+        UD60x18 p
+    ) internal view returns (UD60x18) {
+        if (isZero(s)) {
             revert ZeroSupply();
         }
-        if (_connectorBalance == 0) {
+        if (isZero(b)) {
             revert ZeroBalance();
         }
-        if (_connectorWeight == 0) {
-            revert ZeroConnectorWeight();
+        if (w == 0) {
+            revert ZeroWeight();
         }
-        if (_connectorWeight > MAX_WEIGHT) {
-            revert ConnectorWeightExceeded();
+        if (w > MAX_WEIGHT) {
+            revert WeightExceeded();
         }
-
-        // special case for 0 deposit amount
-        if (_depositAmount == 0) {
-            return 0;
+        if (isZero(p)) {
+            return ud(0);
         }
-
-        // special case if the weight = 100%
-        if (_connectorWeight == MAX_WEIGHT) {
-            return (_supply * _depositAmount) / _connectorBalance;
+        if (w == MAX_WEIGHT) {
+            UD60x18 r0 = div(p, b);
+            return mul(s, r0);
         }
-
-        uint256 result;
-        uint8 precision;
-        uint256 baseN = _depositAmount + _connectorBalance;
-        (result, precision) = power(baseN, _connectorBalance, _connectorWeight, MAX_WEIGHT);
-        uint256 temp = (_supply * result) >> precision;
-        return temp - _supply;
+        UD60x18 pp = add(p, b);
+        UD60x18 base = div(pp, b);
+        UD60x18 exponent = div(convert(w), convert(MAX_WEIGHT));
+        UD60x18 r = pow(base, exponent);
+        UD60x18 sp = mul(s, r);
+        return sub(sp, s);
     }
 
     /**
      * @dev given a token supply, connector balance, weight and a sell amount (in the main token),
      * calculates the return for a given conversion (in the connector token)
      *
-     * Formula:
-     * Return = _connectorBalance * (1 - (1 - _sellAmount / _supply) ^ (1 / (_connectorWeight / 1000000)))
+     * p = b * (1 - (1 - k / s) ^ (1 / (w / 1000000)))
      *
-     * @param _supply              token total supply
-     * @param _connectorBalance    total connector
-     * @param _connectorWeight     constant connector Weight, represented in ppm, 1-1000000
-     * @param _sellAmount          sell amount, in the token itself
+     * @param s    token total supply, in 18-decimal fixed point format (UD60x18)
+     * @param b    current total contract balance,  in 18-decimal fixed point format (UD60x18)
+     * @param w    curve weight, represented in 6-decimal fixed point, with the range of 1 - 1000000
+     * @param k    amount of contract token to be sold, in 18-decimal fixed point format
      *
-     * @return sale return amount
+     * @return p    the amount of native tokens to be returned for the amount of contract token to be sold, in 18-decimal fixed point format (UD60x18)
      */
-    function calculateSaleReturn(uint256 _supply, uint256 _connectorBalance, uint32 _connectorWeight, uint256 _sellAmount) internal view returns (uint256) {
-        // validate input
-        require(_supply > 0 && _connectorBalance > 0 && _connectorWeight > 0 && _connectorWeight <= MAX_WEIGHT && _sellAmount <= _supply);
-        // validate input
-        if (_supply == 0) {
+    function calculateSaleReturn(UD60x18 s, UD60x18 b, uint32 w, UD60x18 k) internal view returns (UD60x18) {
+        if (isZero(s)) {
             revert ZeroSupply();
         }
-        if (_connectorBalance == 0) {
+        if (isZero(b)) {
             revert ZeroBalance();
         }
-        if (_connectorWeight == 0) {
-            revert ZeroConnectorWeight();
+        if (w == 0) {
+            revert ZeroWeight();
         }
-        if (_connectorWeight > MAX_WEIGHT) {
-            revert ConnectorWeightExceeded();
+        if (w > MAX_WEIGHT) {
+            revert WeightExceeded();
         }
-        if (_sellAmount > _supply) {
+        if (gt(k, s)) {
             revert SellAmountExceededSupply();
         }
-
-        // special case for 0 sell amount
-        if (_sellAmount == 0) {
-            return 0;
+        if (isZero(k)) {
+            return ud(0);
         }
-
-        // special case for selling the entire supply
-        if (_sellAmount == _supply) {
-            return _connectorBalance;
+        if (eq(k, s)) {
+            return b;
         }
-
-        // special case if the weight = 100%
-        if (_connectorWeight == MAX_WEIGHT) {
-            return (_connectorBalance * _sellAmount) / _supply;
+        if (w == MAX_WEIGHT) {
+            UD60x18 r0 = div(k, s);
+            return mul(b, r0);
         }
-
-        uint256 result;
-        uint8 precision;
-        uint256 baseD = _supply - _sellAmount;
-        (result, precision) = power(_supply, baseD, MAX_WEIGHT, _connectorWeight);
-        uint256 oldBalance = _connectorBalance * result;
-        uint256 newBalance = _connectorBalance << precision;
-        return (oldBalance - newBalance) / result;
+        UD60x18 sp = sub(s, k);
+        UD60x18 exponent = div(convert(MAX_WEIGHT), convert(w));
+        UD60x18 base = div(sp, s);
+        UD60x18 r = pow(base, exponent);
+        UD60x18 bp = mul(b, r);
+        return sub(b, bp);
+        //        another way, potentially more stable, but needs more testing to confirm
+        //        UD60x18 baseInversed = div(s, sp);
+        //        UD60x18 rInversed = pow(baseInversed, exponent);
+        //        UD60x18 bpInversed = mul(b, rInversed);
+        //        return div(sub(b, bpInversed), rInvesred)
     }
 }
