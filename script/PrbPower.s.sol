@@ -1,7 +1,7 @@
 pragma solidity >=0.8.26;
 
 import "forge-std/Script.sol";
-import {UD60x18, ud, convert} from "@prb/math/src/UD60x18.sol";
+import {UD60x18, ud, convert, pow} from "@prb/math/src/UD60x18.sol";
 
 contract PrbPowerEnumeration is Script {
     function run() public {
@@ -10,7 +10,7 @@ contract PrbPowerEnumeration is Script {
         uint256 FROM = 1000000000; // still good!
         for (uint256 i = FROM; i < FROM * 10; i += FROM) {
 
-            uint256 aw = pow(ud(i * 1e18), 2);
+            UD60x18 aw = pow(ud(i * 1e18), ud(2e18));
             uint256 a = convert(aw);
             uint256 b = i * i;
             int256 diff = int256(a) - int256(b);
