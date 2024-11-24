@@ -1,7 +1,5 @@
 pragma solidity ^0.8.26;
 
-
-uint32 constant MAX_WEIGHT = 1000000;
 // TODO: make this a library after constant uint256 array is supported
 /**
  * bancor formula by bancor
