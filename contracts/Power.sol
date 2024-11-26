@@ -1,7 +1,6 @@
 pragma solidity ^0.8.26;
 
 // TODO: make this a library after constant uint256 array is supported
-
 /**
  * bancor formula by bancor
  * https://github.com/bancorprotocol/contracts
@@ -13,7 +12,6 @@ pragma solidity ^0.8.26;
 contract Power {
 
     uint256 private constant ONE = 1;
-    uint32 private constant MAX_WEIGHT = 1000000;
     uint8 private constant MIN_PRECISION = 32;
     uint8 private constant MAX_PRECISION = 127;
 

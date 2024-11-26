@@ -1,5 +1,7 @@
 @uniswap/v2-core/contracts/=lib/v2-core/contracts/
 @uniswap/v2-periphery/contracts/=lib/v2-periphery/contracts/
+@contracts/=contracts/
+@prb/math/=lib/prb-math/
 @openzeppelin/contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/contracts/
 @openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/
 ds-test/=lib/openzeppelin-contracts-upgradeable/lib/forge-std/lib/ds-test/src/
@@ -8,6 +10,7 @@ forge-std/=lib/forge-std/src/
 halmos-cheatcodes/=lib/openzeppelin-contracts-upgradeable/lib/halmos-cheatcodes/src/
 openzeppelin-contracts-upgradeable/=lib/openzeppelin-contracts-upgradeable/
 openzeppelin-contracts/=lib/openzeppelin-contracts/
+prb-math/=lib/prb-math/src/
 solady/=lib/solady/src/
 v2-core/=lib/v2-core/contracts/
 v2-periphery/=lib/v2-periphery/contracts/
