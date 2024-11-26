@@ -50,8 +50,7 @@ async function deployTokenFactory() {
     return { tokenFactory, bondingCurve };
 }
 
-async function test({ maxFundingRateInterval }) {
-    console.log(`----test ${maxFundingRateInterval} --------------`);
+async function test() {
     const { bondingCurve, tokenFactory } = await deployTokenFactory();
 
     await sendTxn(
@@ -131,21 +130,7 @@ async function test({ maxFundingRateInterval }) {
 
 async function main() {
     try {
-        await test({ maxFundingRateInterval: 86400 });
-    } catch (e) {
-        console.log(e)
-    }
-
-    return;
-
-    try {
-        await test({ maxFundingRateInterval: 1 });
-    } catch (e) {
-        console.log(e)
-    }
-
-    try {
-        await test({ maxFundingRateInterval: 10 });
+        await test();
     } catch (e) {
         console.log(e)
     }
