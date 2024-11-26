@@ -1,5 +1,5 @@
 const { ADDRESS_ZERO } = require("@uniswap/v3-sdk")
-const { deployContract, sendTxn, contractAt } = require("./shared/helpers")
+const { deployContract, sendTxn, contractAt, sleep } = require("./shared/helpers")
 const { expandDecimals } = require("./shared/utilities")
 
 async function createToken(tokenFactory, name, symbol) {
@@ -21,10 +21,14 @@ async function getTokenBalances(tokenAddress) {
 
     const symbol = await token.symbol();
 
+    const balance = Number(await token.balanceOf(deployer.address));
     // check token balance
-    console.log(`${symbol} balance: `, Number(await token.balanceOf(deployer.address)));
+    console.log(`${symbol} balance: `, balance);
 
-    console.log(`${symbol} totalSupply: `, Number(await token.totalSupply()));
+    const totalSupply = Number(await token.totalSupply());
+    console.log(`${symbol} totalSupply: `, totalSupply);
+
+    return { balance, totalSupply };
 }
 
 async function deployTokenFactory() {
@@ -33,7 +37,7 @@ async function deployTokenFactory() {
 
     const tokenImplementation = await deployContract("Token", [], "Token")
 
-    const bondingCurve = await deployContract("BondingCurve", [16319324419, 1000000000], "BondingCurve")
+    const bondingCurve = await deployContract("BancorBondingCurve", [1000000, 1000000], "BondingCurve")
 
     const tokenFactory = await deployContract("TokenFactory", [
         tokenImplementation.address, // _tokenImplementation,
@@ -43,11 +47,20 @@ async function deployTokenFactory() {
         100, // _feePercent
     ], "TokenFactory")
 
-    return tokenFactory;
+    return { tokenFactory, bondingCurve };
 }
 
-async function main() {
-    const tokenFactory = await deployTokenFactory();
+async function test() {
+    const { bondingCurve, tokenFactory } = await deployTokenFactory();
+
+    await sendTxn(
+        tokenFactory.startNewCompetition(),
+        "tokenFactory.startNewCompetition"
+    )
+
+    console.log('startNewCompetition: ', Number(await tokenFactory.currentCompetitionId()))
+
+    await sleep(2000);
 
     const tokenA = await createToken(tokenFactory, "MyFirstToken1", "AAA");
     const tokenB = await createToken(tokenFactory, "MyFirstToken2", "BBB");
@@ -59,38 +72,69 @@ async function main() {
     await sendTxn(
         tokenFactory.buy(tokenA, { value: expandDecimals(1, 14) }),
         "tokenFactory.buy"
-    )
+    )    
 
     await sendTxn(
         tokenFactory.buy(tokenB, { value: expandDecimals(1, 13) }),
         "tokenFactory.buy"
     )
 
-    await getTokenBalances(tokenA);
+    const { totalSupply: totalSupplyA } = await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
+
+    // console.log(
+    //     Number(await tokenFactory.collateral(tokenA)),
+    //     totalSupplyA,
+    //     totalSupplyA - 100
+    // )
+
+    // console.log('computeRefundForBurning: ', await bondingCurve.computeRefundForBurning(
+    //     await tokenFactory.collateral(tokenA),
+    //     totalSupplyA,
+    //     totalSupplyA - 100 // expandDecimals(1, 21)
+    // ));
 
     // buy token for ONE
     await sendTxn(
-        tokenFactory.sell(tokenA, expandDecimals(1, 21)),
+        tokenFactory.sell(tokenA, totalSupplyA - 100),
         "tokenFactory.sell"
     )
 
     await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
 
+    const prevCompetitionId = await tokenFactory.currentCompetitionId();
+
     await sendTxn(
-        tokenFactory.setWinner(tokenA),
-        "tokenFactory.setWinner"
+        tokenFactory.startNewCompetition(),
+        "tokenFactory.startNewCompetition"
+    )
+    
+    console.log('startNewCompetition: ', Number(await tokenFactory.currentCompetitionId()))
+
+    await sendTxn(
+        tokenFactory.setWinnerByCompetitionId(prevCompetitionId),
+        "tokenFactory.setWinnerByCompetitionId"
     )
 
     await sendTxn(
-        tokenFactory.burnTokenAndMintWinner(tokenB),
+        tokenFactory.burnTokenAndMintWinner(tokenA),
         "tokenFactory.burnTokenAndMintWinner"
     );
 
     await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
+
+    console.log('winner: ', await tokenFactory.getWinnerByCompetitionId(prevCompetitionId));
 };
+
+async function main() {
+    try {
+        await test();
+    } catch (e) {
+        console.log(e)
+    }
+}
 
 main()
     .then(() => process.exit(0))

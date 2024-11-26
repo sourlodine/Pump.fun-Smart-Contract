@@ -17,6 +17,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         FUNDING,
         TRADING
     }
+
     uint256 public constant MAX_SUPPLY = 10 ** 9 * 1 ether; // 1 Billion
     uint256 public constant INITIAL_SUPPLY = (MAX_SUPPLY * 1) / 5;
     uint256 public constant FUNDING_SUPPLY = (MAX_SUPPLY * 4) / 5;
@@ -24,10 +25,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public constant FEE_DENOMINATOR = 10000;
 
     mapping(address => TokenState) public tokens;
-    mapping(uint => address) private tokensAddresses;
-    uint totalTokensAddresses;
 
-    mapping(address => uint256) public collateral;
+    mapping(uint256 => address[]) public tokensByCompetitionId;
+
+    mapping(address => uint256) public competitionIds;
+    uint256 public currentCompetitionId = 0;
+
     address public immutable tokenImplementation;
     address public uniswapV2Router;
     address public uniswapV2Factory;
@@ -35,7 +38,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public feePercent; // bp
     uint256 public fee;
 
-    address public winnerToken;
+    mapping(uint256 => address) public winners;
+    mapping(uint256 => mapping(address => uint256)) public collateralById;
 
     // Events
     event TokenCreated(
@@ -44,6 +48,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         string symbol,
         string uri,
         address creator,
+        uint256 competitionId,
         uint256 timestamp
     );
 
@@ -65,7 +70,11 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         uint256 timestamp
     );
 
-    event SetWinner(address indexed winner, uint256 timestamp);
+    event SetWinner(
+        address indexed winner, 
+        uint256 competitionId,
+        uint256 timestamp
+    );
 
     event BurnTokenAndMintWinner(
         address indexed sender,
@@ -91,7 +100,19 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         feePercent = _feePercent;
     }
 
+    modifier inCompetition(address tokenAddress) {
+        require(
+            competitionIds[tokenAddress] == currentCompetitionId,
+            "The competition for this token has already ended"
+        );
+        _;
+    }
+
     // Admin functions
+
+    function startNewCompetition() external onlyOwner {
+        currentCompetitionId = currentCompetitionId + 1;
+    }
 
     function setBondingCurve(address _bondingCurve) external onlyOwner {
         bondingCurve = BancorBondingCurve(_bondingCurve);
@@ -119,8 +140,9 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         token.initialize(name, symbol, uri, address(this));
         tokens[tokenAddress] = TokenState.FUNDING;
 
-        tokensAddresses[totalTokensAddresses] = tokenAddress;
-        totalTokensAddresses++;
+        tokensByCompetitionId[currentCompetitionId].push(tokenAddress);
+
+        competitionIds[tokenAddress] = currentCompetitionId;
 
         emit TokenCreated(
             tokenAddress,
@@ -128,22 +150,28 @@ contract TokenFactory is ReentrancyGuard, Ownable {
             symbol,
             uri,
             msg.sender,
+            currentCompetitionId,
             block.timestamp
         );
 
         return tokenAddress;
     }
 
-    function buy(address tokenAddress) external payable nonReentrant {
+    function buy(address tokenAddress) external payable nonReentrant inCompetition(tokenAddress) {
         _buy(tokenAddress, msg.sender, msg.value);
     }
 
-    function _buy(address tokenAddress, address receiver, uint256 valueToBuy) internal returns(uint256) {
+    function _buy(
+        address tokenAddress,
+        address receiver,
+        uint256 valueToBuy
+    ) internal returns (uint256) {
         require(tokens[tokenAddress] == TokenState.FUNDING, "Token not found");
         require(valueToBuy > 0, "ETH not enough");
         // calculate fee
         uint256 valueToReturn;
-        uint256 tokenCollateral = collateral[tokenAddress];
+        uint256 _competitionId = competitionIds[tokenAddress];
+        uint256 tokenCollateral = collateralById[_competitionId][tokenAddress];
 
         uint256 remainingEthNeeded = FUNDING_GOAL - tokenCollateral;
         uint256 contributionWithoutFee = (valueToBuy * FEE_DENOMINATOR) /
@@ -159,7 +187,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         fee += _fee;
         Token token = Token(tokenAddress);
         uint256 amount = bondingCurve.computeMintingAmountFromPrice(
-            collateral[tokenAddress],
+            collateralById[_competitionId][tokenAddress],
             token.totalSupply(),
             contributionWithoutFee
         );
@@ -168,7 +196,9 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         tokenCollateral += contributionWithoutFee;
         token.mint(receiver, amount);
 
-        collateral[tokenAddress] = tokenCollateral;
+        collateralById[_competitionId][tokenAddress] = tokenCollateral;
+
+        // TODO - return left not working for burnTokenAndMintWinner case
         // return left
         // if (valueToReturn > 0) {
         //     (bool success, ) = receiver.call{value: amount - valueToBuy}(
@@ -182,7 +212,7 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (amount);
     }
 
-    function sell(address tokenAddress, uint256 amount) external nonReentrant {
+    function sell(address tokenAddress, uint256 amount) external nonReentrant inCompetition(tokenAddress) {
         _sell(tokenAddress, amount, msg.sender, msg.sender);
     }
 
@@ -197,9 +227,12 @@ contract TokenFactory is ReentrancyGuard, Ownable {
             "Token is not funding"
         );
         require(amount > 0, "Amount should be greater than zero");
+        
         Token token = Token(tokenAddress);
+        uint256 _competitionId = competitionIds[tokenAddress];
+
         uint256 receivedETH = bondingCurve.computeRefundForBurning(
-            collateral[tokenAddress],
+            collateralById[_competitionId][tokenAddress],
             token.totalSupply(),
             amount
         );
@@ -208,11 +241,11 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         receivedETH -= _fee;
         fee += _fee;
         token.burn(from, amount);
-        collateral[tokenAddress] -= receivedETH;
+        collateralById[_competitionId][tokenAddress] -= receivedETH;
         // send ether
         //slither-disable-next-line arbitrary-send-eth
 
-        if(to != address(this)) {
+        if (to != address(this)) {
             (bool success, ) = to.call{value: receivedETH}(new bytes(0));
             require(success, "ETH send failed");
         }
@@ -265,21 +298,54 @@ contract TokenFactory is ReentrancyGuard, Ownable {
         return (_amount * _feePercent) / FEE_DENOMINATOR;
     }
 
-    function setWinner(address winnerAddress) external onlyOwner {
-        winnerToken = winnerAddress;
+    function getWinnerByCompetitionId(uint256 competitionId) public view returns (address) {
+        uint256 maxCollateral = 0;
+        address winnerAddress;
 
-        emit SetWinner(winnerAddress, block.timestamp);
+        for (uint256 i = 0; i < tokensByCompetitionId[competitionId].length; i++) {
+            address tokenAddress = tokensByCompetitionId[competitionId][i];
+            uint256 _collateral = collateralById[competitionId][tokenAddress];
+
+            if (_collateral > maxCollateral) {
+                maxCollateral = _collateral;
+                winnerAddress = tokenAddress;
+            }
+        }
+
+        return winnerAddress;
+    }
+
+    function setWinnerByCompetitionId(uint256 competitionId) external {
+        require(competitionId != currentCompetitionId, 'The competition is still active');
+
+        address winnerAddress = getWinnerByCompetitionId(competitionId);
+
+        if(winners[competitionId] != winnerAddress) {
+            winners[competitionId] = winnerAddress;
+            emit SetWinner(winnerAddress, competitionId, block.timestamp);
+        }
     }
 
     function burnTokenAndMintWinner(
         address tokenAddress
     ) external nonReentrant {
-        require(tokenAddress != winnerToken, "token address is the winner");
+        uint256 _competitionId = competitionIds[tokenAddress];
+        
+        require(_competitionId != currentCompetitionId, 'The competition is still active');
+
+        address winnerToken = getWinnerByCompetitionId(_competitionId);
+
+        require(winnerToken != tokenAddress, "token address is the winner");
 
         Token token = Token(tokenAddress);
         uint256 burnedAmount = token.balanceOf(msg.sender);
 
-        uint256 receivedETH = _sell(tokenAddress, burnedAmount, msg.sender, address(this));
+        uint256 receivedETH = _sell(
+            tokenAddress,
+            burnedAmount,
+            msg.sender,
+            address(this)
+        );
 
         uint256 mintedAmount = _buy(winnerToken, msg.sender, receivedETH);
 
