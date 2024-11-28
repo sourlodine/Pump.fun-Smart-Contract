@@ -1,12 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.13;
 
-import "@uniswap/v2-core/contracts/interfaces/IUniswapV2Factory.sol";
-import "@uniswap/v2-periphery/contracts/interfaces/IUniswapV2Router01.sol";
+import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Factory.sol';
+import '@uniswap/v3-core/contracts/interfaces/IUniswapV3Pool.sol';
+import '@uniswap/v3-core/contracts/interfaces/INonfungiblePositionManager.sol';
 import "@openzeppelin/contracts/proxy/Clones.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import {Constants} from "./libraries/Constants.sol";
+import {CallbackLib} from "./libraries/CallbackLib.sol";
 
 import {BancorBondingCurve} from "./BancorBondingCurve.sol";
 import {Token} from "./Token.sol";
@@ -23,6 +26,10 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public constant FUNDING_SUPPLY = (MAX_SUPPLY * 4) / 5;
     uint256 public constant FUNDING_GOAL = 20 ether;
     uint256 public constant FEE_DENOMINATOR = 10000;
+    uint24 public constant UNISWAP_FEE = 10000;
+    uint256 internal constant FULL_RANGE_LIQUIDITY_AMOUNT_WETH = 0.1 ether;
+    uint256 internal constant FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN = 1e6;
+    
 
     mapping(address => TokenState) public tokens;
 
@@ -32,8 +39,8 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     uint256 public currentCompetitionId = 0;
 
     address public immutable tokenImplementation;
-    address public uniswapV2Router;
-    address public uniswapV2Factory;
+    address internal immutable WETH;
+    address public uniswapV3Factory;
     BancorBondingCurve public bondingCurve;
     uint256 public feePercent; // bp
     uint256 public fee;
@@ -88,16 +95,16 @@ contract TokenFactory is ReentrancyGuard, Ownable {
 
     constructor(
         address _tokenImplementation,
-        address _uniswapV2Router,
-        address _uniswapV2Factory,
+        address _uniswapV3Factory,
         address _bondingCurve,
+        address _weth,
         uint256 _feePercent
     ) Ownable(msg.sender) {
         tokenImplementation = _tokenImplementation;
-        uniswapV2Router = _uniswapV2Router;
-        uniswapV2Factory = _uniswapV2Factory;
+        uniswapV3Factory = _uniswapV3Factory;
         bondingCurve = BancorBondingCurve(_bondingCurve);
         feePercent = _feePercent;
+        WETH = _weth;
     }
 
     modifier inCompetition(address tokenAddress) {
@@ -260,31 +267,32 @@ contract TokenFactory is ReentrancyGuard, Ownable {
     function createLiquilityPool(
         address tokenAddress
     ) internal returns (address) {
-        IUniswapV2Factory factory = IUniswapV2Factory(uniswapV2Factory);
-        IUniswapV2Router01 router = IUniswapV2Router01(uniswapV2Router);
+        IUniswapV3Factory factory = IUniswapV3Factory(uniswapV3Factory);
 
-        address pair = factory.createPair(tokenAddress, router.WETH());
-        return pair;
+        address pool = factory.createPool(tokenAddress, WETH, UNISWAP_FEE);
+
+        return pool;
     }
 
     function addLiquidity(
         address tokenAddress,
         uint256 tokenAmount,
         uint256 ethAmount
-    ) internal returns (uint256) {
+    ) internal returns (uint256 amount0, uint256 amount1) {
         Token token = Token(tokenAddress);
-        IUniswapV2Router01 router = IUniswapV2Router01(uniswapV2Router);
-        token.approve(uniswapV2Router, tokenAmount);
-        //slither-disable-next-line arbitrary-send-eth
-        (, , uint256 liquidity) = router.addLiquidityETH{value: ethAmount}(
+        IUniswapV3Factory factory = IUniswapV3Factory(uniswapV3Factory);
+        address poolAddress = factory.getPool(tokenAddress, WETH, UNISWAP_FEE);
+        
+        token.approve(poolAddress, tokenAmount);
+
+        return _mintFullRange(
+            IUniswapV3Pool(poolAddress),
             tokenAddress,
-            tokenAmount,
-            tokenAmount,
-            ethAmount,
-            address(this),
-            block.timestamp
+            WETH,
+            uint128(tokenAmount),
+            UNISWAP_FEE,
+            1
         );
-        return liquidity;
     }
 
     function burnLiquidityToken(address pair, uint256 liquidity) internal {
@@ -335,28 +343,109 @@ contract TokenFactory is ReentrancyGuard, Ownable {
 
         address winnerToken = getWinnerByCompetitionId(_competitionId);
 
-        require(winnerToken != tokenAddress, "token address is the winner");
+        // require(winnerToken != tokenAddress, "token address is the winner");
 
         Token token = Token(tokenAddress);
-        uint256 burnedAmount = token.balanceOf(msg.sender);
 
-        uint256 receivedETH = _sell(
-            tokenAddress,
-            burnedAmount,
-            msg.sender,
-            address(this)
+        if(winnerToken == tokenAddress) {
+            createLiquilityPool(tokenAddress);
+
+            uint256 ethAmount = collateralById[_competitionId][tokenAddress];
+
+            token.mint(address(this), INITIAL_SUPPLY);
+            addLiquidity(tokenAddress, INITIAL_SUPPLY, ethAmount);
+        } else {
+            uint256 burnedAmount = token.balanceOf(msg.sender);
+
+            uint256 receivedETH = _sell(
+                tokenAddress,
+                burnedAmount,
+                msg.sender,
+                address(this)
+            );
+
+            uint256 mintedAmount = _buy(winnerToken, msg.sender, receivedETH);
+
+            emit BurnTokenAndMintWinner(
+                msg.sender,
+                tokenAddress,
+                winnerToken,
+                burnedAmount,
+                receivedETH,
+                mintedAmount,
+                block.timestamp
+            );
+        }
+    }
+
+    /// @notice Seeds Uniswap V3 pool with a full-tick-range liquidity deployment using funds from caller.
+    /// @param v3Pool The address of the Uniswap V3 pool to deploy liquidity in.
+    /// @param token0 The address of the first token in the Uniswap V3 pool.
+    /// @param token1 The address of the second token in the Uniswap V3 pool.
+    /// @param fee The fee level of the of the underlying Uniswap v3 pool, denominated in hundredths of bips
+    /// @param tickSpacing The tick spacing of the underlying Uniswap v3 pool
+    /// @return the amount of token0 deployed at full range
+    /// @return the amount of token1 deployed at full range
+    function _mintFullRange(
+        IUniswapV3Pool v3Pool,
+        address token0,
+        address token1,
+        uint128 amount,
+        uint24 fee,
+        int24 tickSpacing
+    ) internal returns (uint256, uint256) {
+        // get current tick
+        (uint160 currentSqrtPriceX96, , , , , , ) = v3Pool.slot0();
+
+        // build callback data
+        bytes memory mintdata = abi.encode(
+            CallbackLib.CallbackData({ // compute by reading values from univ3pool every time
+                    poolFeatures: CallbackLib.PoolFeatures({
+                        token0: token0,
+                        token1: token1,
+                        fee: fee
+                    }),
+                    payer: _msgSender()
+                })
         );
 
-        uint256 mintedAmount = _buy(winnerToken, msg.sender, receivedETH);
+        // For full range: L = Δx * sqrt(P) = Δy / sqrt(P)
+        // We start with fixed delta amounts and apply this equation to calculate the liquidity
+        // uint128 fullRangeLiquidity;
+        // unchecked {
+        //     // Since we know one of the tokens is WETH, we simply add 0.1 ETH + worth in tokens
+        //     if (token0 == WETH) {
+        //         fullRangeLiquidity = uint128(
+        //             (FULL_RANGE_LIQUIDITY_AMOUNT_WETH * currentSqrtPriceX96) / Constants.FP96
+        //         );
+        //     } else if (token1 == WETH) {
+        //         fullRangeLiquidity = uint128(
+        //             (FULL_RANGE_LIQUIDITY_AMOUNT_WETH * Constants.FP96) / currentSqrtPriceX96
+        //         );
+        //     } else {
+        //         // Find the resulting liquidity for providing 1e6 of both tokens
+        //         uint128 liquidity0 = uint128(
+        //             (FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN * currentSqrtPriceX96) / Constants.FP96
+        //         );
+        //         uint128 liquidity1 = uint128(
+        //             (FULL_RANGE_LIQUIDITY_AMOUNT_TOKEN * Constants.FP96) / currentSqrtPriceX96
+        //         );
 
-        emit BurnTokenAndMintWinner(
-            msg.sender,
-            tokenAddress,
-            winnerToken,
-            burnedAmount,
-            receivedETH,
-            mintedAmount,
-            block.timestamp
-        );
+        //         // Pick the greater of the liquidities - i.e the more "expensive" option
+        //         // This ensures that the liquidity added is sufficiently large
+        //         fullRangeLiquidity = liquidity0 > liquidity1 ? liquidity0 : liquidity1;
+        //     }
+        // }
+
+        /// mint the required amount in the Uniswap pool
+        /// this triggers the uniswap mint callback function
+        return
+            IUniswapV3Pool(v3Pool).mint(
+                address(this),
+                (Constants.MIN_V3POOL_TICK / tickSpacing) * tickSpacing,
+                (Constants.MAX_V3POOL_TICK / tickSpacing) * tickSpacing,
+                amount,
+                mintdata
+            );
     }
 }

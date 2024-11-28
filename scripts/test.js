@@ -2,6 +2,9 @@ const { ADDRESS_ZERO } = require("@uniswap/v3-sdk")
 const { deployContract, sendTxn, contractAt, sleep } = require("./shared/helpers")
 const { expandDecimals } = require("./shared/utilities")
 
+const {ContractFactory, utils} = require("ethers");
+const { abi, bytecode } = require('@uniswap/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json');
+
 async function createToken(tokenFactory, name, symbol) {
     // creating new Token
     const tx = await tokenFactory.createToken(name, symbol, 'https://harmony.one');
@@ -32,18 +35,23 @@ async function getTokenBalances(tokenAddress) {
 }
 
 async function deployTokenFactory() {
-    // const [deployer] = await ethers.getSigners()
-    // const weth = { address: "0xcF664087a5bB0237a0BAd6742852ec6c8d69A27a" }
+    const [deployer] = await ethers.getSigners()
+    const weth = { address: "0xcF664087a5bB0237a0BAd6742852ec6c8d69A27a" }
 
     const tokenImplementation = await deployContract("Token", [], "Token")
 
     const bondingCurve = await deployContract("BancorBondingCurve", [1000000, 1000000], "BondingCurve")
 
+    // const uniswapV3Factory = "0x12d21f5d0ab768c312e19653bf3f89917866b8e8";
+    const Factory = new ContractFactory(abi, bytecode, deployer);
+    const factory = await Factory.deploy();
+    const uniswapV3Factory = factory.address;
+
     const tokenFactory = await deployContract("TokenFactory", [
         tokenImplementation.address, // _tokenImplementation,
-        ADDRESS_ZERO, // _uniswapV2Router,
-        ADDRESS_ZERO, // _uniswapV2Factory,
+        uniswapV3Factory, // _uniswapV3Factory,
         bondingCurve.address, //_bondingCurve,
+        weth.address,
         100, // _feePercent
     ], "TokenFactory")
 
@@ -119,8 +127,16 @@ async function test() {
 
     await sendTxn(
         tokenFactory.burnTokenAndMintWinner(tokenA),
-        "tokenFactory.burnTokenAndMintWinner"
+        "tokenFactory.burnTokenAndMintWinner for NOT Winner"
     );
+
+    await getTokenBalances(tokenA);
+    await getTokenBalances(tokenB);
+
+    await sendTxn(
+        tokenFactory.burnTokenAndMintWinner(tokenB),
+        "tokenFactory.burnTokenAndMintWinner for Winner"
+    );    
 
     await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
