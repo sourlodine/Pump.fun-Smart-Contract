@@ -3,7 +3,7 @@ const { deployContract, sendTxn, contractAt, sleep } = require("./shared/helpers
 const { expandDecimals } = require("./shared/utilities")
 
 const {ContractFactory, utils} = require("ethers");
-const { abi, bytecode } = require('@uniswap/v3-core/artifacts/contracts/UniswapV3Factory.sol/UniswapV3Factory.json');
+const nonfungiblePositionManager = require('@uniswap/v3-periphery/artifacts/contracts/NonfungiblePositionManager.sol/NonfungiblePositionManager.json');
 
 async function createToken(tokenFactory, name, symbol) {
     // creating new Token
@@ -42,14 +42,19 @@ async function deployTokenFactory() {
 
     const bondingCurve = await deployContract("BancorBondingCurve", [1000000, 1000000], "BondingCurve")
 
-    // const uniswapV3Factory = "0x12d21f5d0ab768c312e19653bf3f89917866b8e8";
-    const Factory = new ContractFactory(abi, bytecode, deployer);
-    const factory = await Factory.deploy();
-    const uniswapV3Factory = factory.address;
+    let uniswapV3FactoryAddress = "0x12d21f5d0ab768c312e19653bf3f89917866b8e8";
+    
+    // const Factory = new ContractFactory(uniswapV3Factory.abi, uniswapV3Factory.bytecode, deployer);
+    // const factory = await Factory.deploy();
+    // uniswapV3FactoryAddress = factory.address;
+
+    const PositionManager = new ContractFactory(nonfungiblePositionManager.abi, nonfungiblePositionManager.bytecode, deployer);
+    const positionManager = await PositionManager.deploy(uniswapV3FactoryAddress, weth.address, ADDRESS_ZERO);
 
     const tokenFactory = await deployContract("TokenFactory", [
         tokenImplementation.address, // _tokenImplementation,
-        uniswapV3Factory, // _uniswapV3Factory,
+        uniswapV3FactoryAddress,
+        positionManager.address,
         bondingCurve.address, //_bondingCurve,
         weth.address,
         100, // _feePercent
@@ -141,7 +146,20 @@ async function test() {
     await getTokenBalances(tokenA);
     await getTokenBalances(tokenB);
 
-    console.log('winner: ', await tokenFactory.getWinnerByCompetitionId(prevCompetitionId));
+    const winnerTokenAddress = await tokenFactory.getWinnerByCompetitionId(prevCompetitionId);
+    console.log('winner token: ', winnerTokenAddress);
+
+    const poolAddress = await tokenFactory.tokensPools(winnerTokenAddress);
+    console.log('winner pool: ', poolAddress);
+
+    const tokenCreator = await tokenFactory.tokensCreators(winnerTokenAddress);
+    console.log('winner user: ', tokenCreator);
+
+    // next try to swap with @uniswap/v3-sdk
+
+    // const pool = contractAt('UniswapV3Pool', poolAddress);    
+    // pool.swap();
+    // await getTokenBalances(tokenB);
 };
 
 async function main() {
